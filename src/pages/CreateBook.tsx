@@ -43,20 +43,21 @@ interface GeneratedBook {
   status: 'draft' | 'generated' | 'published';
 }
 
-interface CSVBookData {
-  title: string;
+interface BookPrompt {
+  id: string;
   prompt: string;
   niche: string;
   targetAudience: string;
-  wordCount: string;
+  wordCount: number;
   keywords?: string;
   description?: string;
+  createdAt: string;
 }
 
 export const CreateBook: React.FC = () => {
   const { user } = useAuth();
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvData, setCsvData] = useState<CSVBookData[]>([]);
+  const [bookPrompts, setBookPrompts] = useState<BookPrompt[]>([]);
+  const [currentPrompt, setCurrentPrompt] = useState<BookPrompt | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<GenerationStep[]>([]);
@@ -68,6 +69,10 @@ export const CreateBook: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
   const [selectedBookForDropdown, setSelectedBookForDropdown] = useState<GeneratedBook | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [animationPaused, setAnimationPaused] = useState(false);
 
   // Check if user needs to upgrade
   useEffect(() => {
@@ -76,109 +81,46 @@ export const CreateBook: React.FC = () => {
     }
   }, [user]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-      setUploadError('Please upload a valid CSV file');
-      return;
+  // Initialize currentPrompt with empty values
+  useEffect(() => {
+    if (!currentPrompt) {
+      setCurrentPrompt({
+        id: '',
+        prompt: '',
+        niche: '',
+        targetAudience: '',
+        wordCount: 5000,
+        keywords: '',
+        description: '',
+        createdAt: ''
+      });
     }
+  }, [currentPrompt]);
 
-    setCsvFile(file);
+  const handlePromptSubmit = (prompt: BookPrompt) => {
+    setCurrentPrompt(prompt);
+    setBookPrompts(prev => [...prev, prompt]);
     setUploadError('');
-    processCSVFile(file);
   };
 
-  const processCSVFile = (file: File) => {
-    setIsProcessing(true);
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split('\n');
-      
-      if (lines.length < 2) {
-        setUploadError('CSV file must contain at least a header row and one data row. Please follow the template format.');
-        setIsProcessing(false);
-        return;
-      }
-      
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      
-      // Check if required headers are present
-      const requiredHeaders = ['title', 'prompt', 'niche', 'targetaudience'];
-      const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
-      
-      if (missingHeaders.length > 0) {
-        setUploadError(`Missing required columns: ${missingHeaders.join(', ')}. Please follow the CSV template format.`);
-        setIsProcessing(false);
-        return;
-      }
-      
-      const data: CSVBookData[] = [];
-      const errors: string[] = [];
-      
-      for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim()) {
-          const values = lines[i].split(',').map(v => v.trim());
-          const row: any = {};
-          
-          headers.forEach((header, index) => {
-            row[header] = values[index] || '';
-          });
-          
-          // Validate required fields
-          const missingFields: string[] = [];
-          if (!row.title) missingFields.push('title');
-          if (!row.prompt) missingFields.push('prompt');
-          if (!row.niche) missingFields.push('niche');
-          if (!row.targetaudience) missingFields.push('target audience');
-          
-          if (missingFields.length > 0) {
-            errors.push(`Row ${i + 1}: Missing required fields: ${missingFields.join(', ')}`);
-          } else {
-            data.push({
-              title: row.title,
-              prompt: row.prompt,
-              niche: row.niche,
-              targetAudience: row.targetaudience,
-              wordCount: row.wordcount || '5000',
-              keywords: row.keywords || '',
-              description: row.description || ''
-            });
-          }
-        }
-      }
-      
-      if (errors.length > 0) {
-        const errorMessage = `Incorrect data entered. Please follow the template format.\n\nErrors found:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n... and ${errors.length - 5} more errors` : ''}`;
-        setUploadError(errorMessage);
-        setCsvData([]);
-      } else if (data.length === 0) {
-        setUploadError('No valid data rows found. Please ensure your CSV contains at least one row with all required fields.');
-        setCsvData([]);
-      } else {
-        setUploadError('');
-        setCsvData(data);
-      }
-      
-      setIsProcessing(false);
+  const createBookPrompt = (promptData: Omit<BookPrompt, 'id' | 'createdAt'>) => {
+    const newPrompt: BookPrompt = {
+      ...promptData,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString()
     };
-    
-    reader.onerror = () => {
-      setUploadError('Failed to read the CSV file. Please try again.');
-      setIsProcessing(false);
-    };
-    
-    reader.readAsText(file);
+    return newPrompt;
   };
 
-  const handleGenerateAll = async () => {
-    if (csvData.length === 0) {
-      alert('Please upload a CSV file with book data first');
+  const handleGenerateBook = async (prompt: BookPrompt) => {
+    if (!prompt) {
+      alert('Please provide a book prompt first');
       return;
     }
+
+    // Extract niche and target audience from the prompt if not provided
+    const extractedNiche = prompt.niche || 'General';
+    const extractedTargetAudience = prompt.targetAudience || 'General Audience';
 
     setIsGenerating(true);
     setGeneratedBooks([]);
@@ -186,21 +128,19 @@ export const CreateBook: React.FC = () => {
 
     // Initialize generation steps
     const steps: GenerationStep[] = [
-      { id: '1', name: 'Analyzing CSV data', status: 'pending', progress: 0 },
-      { id: '2', name: 'Generating book outlines', status: 'pending', progress: 0 },
+      { id: '1', name: 'Analyzing prompt', status: 'pending', progress: 0 },
+      { id: '2', name: 'Generating book outline', status: 'pending', progress: 0 },
       { id: '3', name: 'Creating chapter content', status: 'pending', progress: 0 },
-      { id: '4', name: 'Generating book covers', status: 'pending', progress: 0 },
+      { id: '4', name: 'Generating book cover', status: 'pending', progress: 0 },
       { id: '5', name: 'Finalizing and optimizing', status: 'pending', progress: 0 }
     ];
     
     setGenerationSteps(steps);
 
-    // Process each book in the CSV
-    for (let bookIndex = 0; bookIndex < csvData.length; bookIndex++) {
-      const bookData = csvData[bookIndex];
-      setCurrentBookIndex(bookIndex);
+    // Process the book generation
+    setCurrentBookIndex(0);
 
-      // Simulate the generation process for each book
+      // Simulate the generation process
       for (let i = 0; i < steps.length; i++) {
         // Update step to running
         setGenerationSteps(prev => prev.map((step, index) => 
@@ -229,11 +169,11 @@ export const CreateBook: React.FC = () => {
       }
 
       // Generate comprehensive mock book data
-      const generateComprehensiveContent = (title: string, niche: string, targetAudience: string, wordCount: number) => {
+      const generateComprehensiveContent = (prompt: string, niche: string, targetAudience: string, wordCount: number) => {
         const chapters = Math.max(3, Math.floor(wordCount / 2000));
         const wordsPerChapter = Math.floor(wordCount / chapters);
         
-        let content = `${title.toUpperCase()}\nA Comprehensive Guide for ${targetAudience}\n\n`;
+        let content = `${prompt.toUpperCase()}\nA Comprehensive Guide for ${targetAudience}\n\n`;
         content += `Table of Contents\n`;
         for (let i = 1; i <= chapters; i++) {
           content += `${i}. Chapter ${i}\n`;
@@ -259,7 +199,7 @@ export const CreateBook: React.FC = () => {
         return content;
       };
 
-      const getChapterTitle = (chapterNum: number, niche: string, _targetAudience: string): string => {
+      const getChapterTitle = (chapterNum: number, niche: string, targetAudience: string): string => {
         const titles = {
           1: `Introduction to ${niche}`,
           2: `Understanding the Fundamentals`,
@@ -300,73 +240,65 @@ export const CreateBook: React.FC = () => {
         return expandedContent.substring(0, wordCount);
       };
 
-      const mockBook: GeneratedBook = {
-        id: `${Date.now()}-${bookIndex}`,
-        title: bookData.title,
-        content: generateComprehensiveContent(bookData.title, bookData.niche, bookData.targetAudience, parseInt(bookData.wordCount)),
-        coverUrl: `https://via.placeholder.com/400x600/3B82F6/FFFFFF?text=${encodeURIComponent(bookData.title)}`,
-        niche: bookData.niche,
-        targetAudience: bookData.targetAudience,
-        wordCount: parseInt(bookData.wordCount),
-        createdAt: new Date().toISOString(),
-        status: 'generated' as const
-      };
+             const mockBook: GeneratedBook = {
+         id: `${Date.now()}-0`,
+         title: prompt.prompt,
+         content: generateComprehensiveContent(prompt.prompt, extractedNiche, extractedTargetAudience, prompt.wordCount),
+         coverUrl: `https://via.placeholder.com/400x600/3B82F6/FFFFFF?text=${encodeURIComponent(prompt.prompt)}`,
+         niche: extractedNiche,
+         targetAudience: extractedTargetAudience,
+         wordCount: prompt.wordCount,
+         createdAt: new Date().toISOString(),
+         status: 'generated' as const
+       };
 
       setGeneratedBooks(prev => [...prev, mockBook]);
-    }
 
     setIsGenerating(false);
   };
 
-  const handleSaveAll = () => {
-    if (generatedBooks.length > 0) {
-      // Save to local storage or send to backend
-      const savedBooks = JSON.parse(localStorage.getItem('savedBooks') || '[]');
-      
-      // Add books with 'saved' status for My Books page
-      const booksToSave = generatedBooks.map(book => ({
-        ...book,
-        status: 'saved' as const,
-        savedAt: new Date().toISOString()
-      }));
-      
-      savedBooks.push(...booksToSave);
-      localStorage.setItem('savedBooks', JSON.stringify(savedBooks));
-      alert(`${generatedBooks.length} books saved successfully! You can view them in the "My Books" page.`);
-    }
-  };
-
-  const handleDownloadAll = () => {
-    if (generatedBooks.length > 0) {
-      // Create and download all books as a zip or individual files
-      generatedBooks.forEach((book) => {
-        const blob = new Blob([book.content], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${book.title}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      });
-    }
-  };
-
-  const downloadCSVTemplate = () => {
-    const template = `title,prompt,niche,targetaudience,wordcount,keywords,description
- "Sample Book Title","Write a book about healthy eating habits","Health & Fitness","Beginners","5000","nutrition,health,wellness","A comprehensive guide to healthy eating"
- "Business Success Guide","Create a book about starting a business","Business & Entrepreneurship","Entrepreneurs","10000","business,startup,entrepreneurship","Complete guide to business success"`;
+  const handleSaveBook = (book: GeneratedBook) => {
+    // Save to local storage or send to backend
+    const savedBooks = JSON.parse(localStorage.getItem('savedBooks') || '[]');
     
-    const blob = new Blob([template], { type: 'text/csv' });
+    // Add book with 'saved' status for My Books page
+    const bookToSave = {
+      ...book,
+      status: 'saved' as const,
+      savedAt: new Date().toISOString()
+    };
+    
+    savedBooks.push(bookToSave);
+    localStorage.setItem('savedBooks', JSON.stringify(savedBooks));
+    alert('Book saved successfully! You can view it in the "My Books" page.');
+  };
+
+  const handleDownloadBook = (book: GeneratedBook) => {
+    const blob = new Blob([book.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'book_creation_template.csv';
+    a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handlePreviewSuggestion = (suggestion: any) => {
+    // Show preview modal with suggestion details
+    setSelectedBook({
+      id: 'preview',
+      title: suggestion.title,
+      content: `This is a preview of "${suggestion.title}" - ${suggestion.description}\n\nNiche: ${suggestion.niche}\nTarget Audience: ${suggestion.targetAudience}\nWord Count: ${suggestion.wordCount.toLocaleString()} words\n\nPrompt: ${suggestion.prompt}`,
+      coverUrl: `https://via.placeholder.com/400x600/3B82F6/FFFFFF?text=${encodeURIComponent(suggestion.title)}`,
+      niche: suggestion.niche,
+      targetAudience: suggestion.targetAudience,
+      wordCount: suggestion.wordCount,
+      createdAt: new Date().toISOString(),
+      status: 'draft' as const
+    });
+    setShowBookView(true);
   };
 
   const handleViewGeneratedBook = (book: GeneratedBook) => {
@@ -420,6 +352,51 @@ export const CreateBook: React.FC = () => {
     setSelectedBookForDropdown(null);
   };
 
+  // Drag handlers for slider
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart(e.clientX - dragOffset);
+    setAnimationPaused(true);
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const newOffset = e.clientX - dragStart;
+    setDragOffset(newOffset);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setAnimationPaused(false);
+    // Reset offset after a short delay to resume animation
+    setTimeout(() => {
+      setDragOffset(0);
+    }, 100);
+  };
+
+  // Touch handlers for mobile devices
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    setDragStart(e.touches[0].clientX - dragOffset);
+    setAnimationPaused(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const newOffset = e.touches[0].clientX - dragStart;
+    setDragOffset(newOffset);
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    setAnimationPaused(false);
+    // Reset offset after a short delay to resume animation
+    setTimeout(() => {
+      setDragOffset(0);
+    }, 100);
+  };
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -436,13 +413,14 @@ export const CreateBook: React.FC = () => {
   }, [showDropdown]);
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gray-50 page-container">
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Create Books from CSV</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Create Books with AI</h1>
           <p className="text-muted-foreground">
-            Upload a CSV file to generate multiple books with AI
+            Generate high-quality books from your prompts using AI
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -453,103 +431,220 @@ export const CreateBook: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        {/* CSV Upload Section */}
-        <div className="xl:col-span-1 space-y-6">
+      {/* Suggested Book Generation Slider */}
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Hot Selling Genres & Amazon KDP Suggestions
+          </CardTitle>
+          <CardDescription>
+            Generate popular book types that are trending on Amazon KDP
+          </CardDescription>
+        </CardHeader>
+                <CardContent>
+                     <div className="relative overflow-hidden group">
+            {/* Live Moving Slider Container */}
+                         <div 
+               className={`flex gap-3 cursor-grab active:cursor-grabbing ${!animationPaused ? 'animate-scroll' : ''}`}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              style={{ transform: `translateX(${dragOffset}px)` }}
+            >
+              {(() => {
+                const suggestions = [
+                  { title: "Weight Loss Guide", niche: "Health & Fitness", targetAudience: "Beginners", wordCount: 8000, prompt: "Create a comprehensive weight loss guide for beginners", description: "A complete guide to healthy weight loss with proven strategies and meal plans" },
+                  { title: "Business Startup", niche: "Business & Entrepreneurship", targetAudience: "Entrepreneurs", wordCount: 10000, prompt: "Write a complete guide to starting a business from scratch", description: "Step-by-step guide to launching your own successful business venture" },
+                  { title: "Digital Marketing", niche: "Marketing", targetAudience: "Professionals", wordCount: 12000, prompt: "Create a digital marketing strategy guide for businesses", description: "Comprehensive digital marketing strategies for modern businesses" },
+                  { title: "Personal Finance", niche: "Finance", targetAudience: "Young Adults", wordCount: 9000, prompt: "Write a personal finance guide for young adults", description: "Essential money management skills for financial independence" },
+                  { title: "Cooking Basics", niche: "Food & Cooking", targetAudience: "Beginners", wordCount: 7000, prompt: "Create a beginner's guide to cooking healthy meals", description: "Master the fundamentals of cooking with simple, delicious recipes" },
+                  { title: "Productivity Hacks", niche: "Self-Improvement", targetAudience: "Professionals", wordCount: 6000, prompt: "Write a productivity guide with actionable hacks", description: "Transform your work efficiency with proven productivity techniques" },
+                  { title: "Fitness Training", niche: "Health & Fitness", targetAudience: "Intermediate", wordCount: 8500, prompt: "Create a fitness training program for intermediate level", description: "Advanced workout routines to take your fitness to the next level" },
+                  { title: "Social Media", niche: "Marketing", targetAudience: "Business Owners", wordCount: 9500, prompt: "Write a social media marketing guide for businesses", description: "Build your brand presence and engage customers effectively" }
+                ];
+                
+                return [
+                  // Original cards
+                  ...suggestions.map((suggestion, index) => (
+                                         <div key={index} className="flex-shrink-0 w-44 h-68 border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-300 bg-white hover:border-blue-300 group">
+                      {/* Card Header */}
+                      <div className="h-16 mb-3">
+                        <h4 className="font-semibold text-sm line-clamp-2 text-gray-900 group-hover:text-blue-600 transition-colors">{suggestion.title}</h4>
+                      </div>
+                      
+                      {/* Badges Section - Fixed Height */}
+                      <div className="h-20 mb-4 space-y-2">
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-gray-50">{suggestion.niche}</Badge>
+                        <Badge variant="secondary" className="text-xs w-full justify-center">{suggestion.targetAudience}</Badge>
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-blue-50 text-blue-700 border-blue-200">{suggestion.wordCount.toLocaleString()} words</Badge>
+                      </div>
+                      
+                      {/* Description - Fixed Height */}
+                      <div className="h-16 mb-4">
+                        <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">{suggestion.description}</p>
+                      </div>
+                      
+                      {/* Action Buttons - Fixed Height */}
+                      <div className="h-20 space-y-2">
+                        <Button 
+                          size="sm" 
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => {
+                            const newPrompt = createBookPrompt({
+                              prompt: suggestion.prompt,
+                              niche: suggestion.niche,
+                              targetAudience: suggestion.targetAudience,
+                              wordCount: suggestion.wordCount
+                            });
+                            setCurrentPrompt(newPrompt);
+                            handleGenerateBook(newPrompt);
+                          }}
+                        >
+                          <Sparkles className="h-3 w-3 mr-2" />
+                          Generate
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full border-gray-300 hover:border-blue-300 hover:bg-blue-50"
+                          onClick={() => handlePreviewSuggestion(suggestion)}
+                        >
+                          <Eye className="h-3 w-3 mr-2" />
+                          Preview
+                        </Button>
+                      </div>
+                    </div>
+                  )),
+                  // Duplicate cards for seamless infinite scroll
+                  ...suggestions.map((suggestion, index) => (
+                                         <div key={`duplicate-${index}`} className="flex-shrink-0 w-44 h-68 border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-300 bg-white hover:border-blue-300 group">
+                      {/* Card Header */}
+                      <div className="h-16 mb-3">
+                        <h4 className="font-semibold text-sm line-clamp-2 text-gray-900 group-hover:text-blue-600 transition-colors">{suggestion.title}</h4>
+                      </div>
+                      
+                      {/* Badges Section - Fixed Height */}
+                      <div className="h-20 mb-4 space-y-2">
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-gray-50">{suggestion.niche}</Badge>
+                        <Badge variant="secondary" className="text-xs w-full justify-center">{suggestion.targetAudience}</Badge>
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-blue-50 text-blue-700 border-blue-200">{suggestion.wordCount.toLocaleString()} words</Badge>
+                      </div>
+                      
+                      {/* Description - Fixed Height */}
+                      <div className="h-16 mb-4">
+                        <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">{suggestion.description}</p>
+                      </div>
+                      
+                      {/* Action Buttons - Fixed Height */}
+                      <div className="h-20 space-y-2">
+                        <Button 
+                          size="sm" 
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => {
+                            const newPrompt = createBookPrompt({
+                              prompt: suggestion.prompt,
+                              niche: suggestion.niche,
+                              targetAudience: suggestion.targetAudience,
+                              wordCount: suggestion.wordCount
+                            });
+                            setCurrentPrompt(newPrompt);
+                            handleGenerateBook(newPrompt);
+                          }}
+                        >
+                          <Sparkles className="h-3 w-3 mr-2" />
+                          Generate
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full border-gray-300 hover:border-blue-300 hover:bg-blue-50"
+                          onClick={() => handlePreviewSuggestion(suggestion)}
+                        >
+                          <Eye className="h-3 w-3 mr-2" />
+                          Preview
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ];
+              })()}
+            </div>
+            
+            {/* Gradient Overlays for Smooth Edges */}
+            <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white via-white to-transparent pointer-events-none"></div>
+            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white via-white to-transparent pointer-events-none"></div>
+            
+            {/* Pause Indicator */}
+            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs text-gray-600 border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+              Hover to pause
+            </div>
+            
+            {/* Drag Indicator */}
+            {isDragging && (
+              <div className="absolute top-4 left-4 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                Dragging...
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-6">
+        {/* Book Prompt Input Section */}
+        <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5" />
-                CSV Upload
+                <FileText className="h-5 w-5" />
+                Book Prompt
               </CardTitle>
               <CardDescription>
-                Upload a CSV file with book data to generate multiple books
+                Describe your book idea and AI will generate the content
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="csv-upload">CSV File *</Label>
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
-                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {csvFile ? csvFile.name : 'Drop your CSV file here or click to browse'}
-                  </p>
-                  <Input
-                    id="csv-upload"
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => document.getElementById('csv-upload')?.click()}
-                    disabled={isProcessing}
-                  >
-                    {isProcessing ? 'Processing...' : 'Choose File'}
-                  </Button>
-                </div>
-                {uploadError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-800 font-medium mb-2">CSV Validation Error</p>
-                    <div className="text-sm text-red-700 whitespace-pre-line">{uploadError}</div>
-                    <div className="mt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={downloadCSVTemplate}
-                        className="text-red-700 border-red-300 hover:bg-red-100"
-                      >
-                        <Download className="h-3 w-3 mr-1" />
-                        Download Template
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <Label htmlFor="book-prompt">Book Description *</Label>
+                <textarea
+                  id="book-prompt"
+                  placeholder="Describe your book idea, topic, target audience, niche, and any specific requirements. For example: 'Write a comprehensive guide to starting a business from scratch, targeting entrepreneurs and beginners in the business niche, with practical steps and strategies.'"
+                  className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={currentPrompt?.prompt || ''}
+                  onChange={(e) => setCurrentPrompt(prev => prev ? { ...prev, prompt: e.target.value } : null)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="word-count">Word Count</Label>
+                <Input
+                  id="word-count"
+                  type="number"
+                  placeholder="5000"
+                  value={currentPrompt?.wordCount || 5000}
+                  onChange={(e) => setCurrentPrompt(prev => prev ? { ...prev, wordCount: parseInt(e.target.value) || 5000 } : null)}
+                />
               </div>
 
               <Button 
-                variant="outline" 
-                onClick={downloadCSVTemplate}
-                className="w-full"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download CSV Template
-              </Button>
-
-              {csvData.length > 0 && (
-                <div className="space-y-2">
-                  <Label>CSV Preview ({csvData.length} books)</Label>
-                  <div className="max-h-40 overflow-y-auto border rounded-lg p-2">
-                    {csvData.slice(0, 5).map((book, index) => (
-                      <div key={index} className="text-sm py-1 border-b last:border-b-0">
-                        <strong>{book.title}</strong> - {book.niche}
-                      </div>
-                    ))}
-                    {csvData.length > 5 && (
-                      <div className="text-sm text-muted-foreground py-1">
-                        ... and {csvData.length - 5} more
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <Button 
-                onClick={handleGenerateAll} 
-                disabled={isGenerating || csvData.length === 0}
+                onClick={() => currentPrompt && handleGenerateBook(currentPrompt)} 
+                disabled={isGenerating || !currentPrompt?.prompt}
                 className="w-full"
                 size="lg"
               >
                 {isGenerating ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Generating {currentBookIndex + 1}/{csvData.length}...
+                    Generating Book...
                   </>
-                ) : (
+                  ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Generate {csvData.length} Books
+                    Generate Book
                   </>
                 )}
               </Button>
@@ -567,7 +662,7 @@ export const CreateBook: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="text-sm text-muted-foreground">
-                  Processing book {currentBookIndex + 1} of {csvData.length}
+                  Generating your book...
                 </div>
                 {generationSteps.map((step) => (
                   <div key={step.id} className="space-y-2">
@@ -592,7 +687,7 @@ export const CreateBook: React.FC = () => {
         </div>
 
         {/* Output Section */}
-        <div className="xl:col-span-3 space-y-6">
+        <div className="space-y-6">
           {generatedBooks.length > 0 ? (
             <>
               {/* Generated Books Summary */}
@@ -609,51 +704,51 @@ export const CreateBook: React.FC = () => {
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleSaveAll}>
+                      <Button variant="outline" size="sm" onClick={() => generatedBooks[0] && handleSaveBook(generatedBooks[0])}>
                         <Save className="h-4 w-4 mr-2" />
-                        Save All
+                        Save Book
                       </Button>
-                      <Button variant="outline" size="sm" onClick={handleDownloadAll}>
+                      <Button variant="outline" size="sm" onClick={() => generatedBooks[0] && handleDownloadBook(generatedBooks[0])}>
                         <Download className="h-4 w-4 mr-2" />
-                        Download All
+                        Download Book
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 gap-6">
                     {generatedBooks.map((book) => (
-                      <div key={book.id} className="border border-gray-200 rounded-xl p-5 space-y-4 hover:shadow-lg hover:border-blue-200 transition-all duration-200 relative bg-white">
-                        <div className="flex items-start gap-4">
-                          <div className="relative">
+                      <div key={book.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg hover:border-blue-200 transition-all duration-200 relative bg-white">
+                        <div className="flex flex-col sm:flex-row items-start gap-4">
+                          <div className="relative flex-shrink-0">
                             <img 
                               src={book.coverUrl} 
                               alt={book.title}
-                              className="w-18 h-28 object-cover rounded-lg border-2 border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-200"
+                              className="w-16 h-24 sm:w-18 sm:h-28 object-cover rounded-lg border-2 border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-200"
                             />
-                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                            <div className="absolute -top-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
                               <div className="w-2 h-2 bg-white rounded-full"></div>
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-base mb-1 line-clamp-2 text-gray-900">{book.title}</h4>
-                            <p className="text-sm text-blue-600 font-medium mb-2">{book.niche}</p>
-                            <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-bold text-base mb-2 line-clamp-2 text-gray-900">{book.title}</h4>
+                            <p className="text-sm text-blue-600 font-medium mb-3">{book.niche}</p>
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
                               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 font-medium">{book.targetAudience}</Badge>
                               <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700 font-medium">{book.wordCount.toLocaleString()} words</Badge>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 border-t border-gray-100 gap-3">
                           <div className="flex items-center gap-2 text-xs text-gray-500">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span>Generated on {new Date(book.createdAt).toLocaleDateString()}</span>
                           </div>
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 font-medium">
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 font-medium self-start sm:self-center">
                             {book.status}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-3 pt-3">
+                        <div className="flex flex-col sm:flex-row items-stretch gap-3 pt-3">
                           <div className="relative dropdown-container flex-1">
                             <Button 
                               variant="outline" 
@@ -668,13 +763,13 @@ export const CreateBook: React.FC = () => {
                             {/* Professional Dropdown View */}
                             {showDropdown === book.id && selectedBookForDropdown && (
                               <div 
-                                className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] min-w-[380px] backdrop-blur-sm"
+                                className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] w-full max-w-sm sm:max-w-md backdrop-blur-sm"
                                 data-dropdown={book.id}
                               >
                                 {/* Arrow indicator */}
                                 <div className="absolute -top-2 left-6 w-4 h-4 bg-white border-l border-t border-gray-200 rotate-45"></div>
                                 
-                                <div className="p-5">
+                                <div className="p-4 sm:p-5">
                                   {/* Header with close button */}
                                   <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-start gap-3 flex-1">
@@ -682,16 +777,16 @@ export const CreateBook: React.FC = () => {
                                         <img 
                                           src={selectedBookForDropdown.coverUrl} 
                                           alt={selectedBookForDropdown.title}
-                                          className="w-14 h-20 object-cover rounded-lg border shadow-md flex-shrink-0"
+                                          className="w-12 h-16 sm:w-14 sm:h-20 object-cover rounded-lg border shadow-md flex-shrink-0"
                                         />
-                                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
-                                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full"></div>
                                         </div>
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <h4 className="font-bold text-sm mb-1 line-clamp-2 text-gray-900">{selectedBookForDropdown.title}</h4>
                                         <p className="text-xs text-blue-600 font-medium mb-1">{selectedBookForDropdown.niche}</p>
-                                        <div className="flex items-center gap-1 mb-2">
+                                        <div className="flex flex-wrap items-center gap-1 mb-2">
                                           <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">{selectedBookForDropdown.targetAudience}</Badge>
                                           <Badge variant="secondary" className="text-xs bg-gray-100">{selectedBookForDropdown.wordCount.toLocaleString()} words</Badge>
                                         </div>
@@ -708,17 +803,17 @@ export const CreateBook: React.FC = () => {
                                   </div>
 
                                   {/* Stats Grid */}
-                                  <div className="grid grid-cols-3 gap-3 mb-4">
-                                    <div className="text-center p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200">
-                                      <div className="text-lg font-bold text-blue-700">{Math.max(3, Math.floor(selectedBookForDropdown.wordCount / 2000))}</div>
+                                  <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+                                    <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                                      <div className="text-base sm:text-lg font-bold text-blue-700">{Math.max(3, Math.floor(selectedBookForDropdown.wordCount / 2000))}</div>
                                       <div className="text-xs text-blue-600 font-medium">Chapters</div>
                                     </div>
-                                    <div className="text-center p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200">
-                                      <div className="text-lg font-bold text-green-700">A+</div>
+                                    <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200">
+                                      <div className="text-base sm:text-lg font-bold text-green-700">A+</div>
                                       <div className="text-xs text-green-600 font-medium">Quality</div>
                                     </div>
-                                    <div className="text-center p-3 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
-                                      <div className="text-lg font-bold text-purple-700">{selectedBookForDropdown.wordCount > 10000 ? 'Premium' : 'Standard'}</div>
+                                    <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
+                                      <div className="text-base sm:text-lg font-bold text-purple-700">{selectedBookForDropdown.wordCount > 10000 ? 'Premium' : 'Standard'}</div>
                                       <div className="text-xs text-purple-600 font-medium">Tier</div>
                                     </div>
                                   </div>
@@ -731,7 +826,7 @@ export const CreateBook: React.FC = () => {
                                       <FileText className="h-4 w-4 text-blue-600" />
                                       Content Preview
                                     </h5>
-                                    <div className="max-h-28 overflow-y-auto p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 text-xs leading-relaxed">
+                                    <div className="max-h-24 sm:max-h-28 overflow-y-auto p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 text-xs leading-relaxed">
                                       <div className="space-y-2">
                                         <p className="font-semibold text-gray-800">
                                           📚 Table of Contents
@@ -756,7 +851,7 @@ export const CreateBook: React.FC = () => {
                                   </div>
                                   
                                   {/* Action Buttons */}
-                                  <div className="flex items-center gap-3">
+                                  <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-3">
                                     <Button 
                                       variant="default" 
                                       size="sm" 
@@ -779,7 +874,7 @@ export const CreateBook: React.FC = () => {
                                   
                                   {/* Footer */}
                                   <div className="mt-4 pt-3 border-t border-gray-100">
-                                    <div className="flex items-center justify-between text-xs text-gray-500">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-500 gap-2">
                                       <span>Generated on {new Date(selectedBookForDropdown.createdAt).toLocaleDateString()}</span>
                                       <span className="flex items-center gap-1">
                                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -817,9 +912,9 @@ export const CreateBook: React.FC = () => {
                       <BookOpen className="h-5 w-5" />
                       Book Generation Workspace
                     </CardTitle>
-                    <CardDescription>
-                      Upload a CSV file to start generating your books
-                    </CardDescription>
+                                         <CardDescription>
+                       Enter your book description to start generating
+                     </CardDescription>
                   </div>
                   <Badge variant="secondary" className="flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
@@ -829,66 +924,57 @@ export const CreateBook: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-center py-12">
-                  <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mb-6">
-                    <FileSpreadsheet className="h-12 w-12 text-blue-600" />
-                  </div>
+                                     <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center mb-6">
+                     <FileText className="h-12 w-12 text-blue-600" />
+                   </div>
+                   
+                   <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                     Ready to Generate Books
+                   </h3>
+                   
+                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                     Describe your book idea in detail and AI will generate high-quality content tailored to your requirements.
+                   </p>
                   
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                    Ready to Generate Books
-                  </h3>
-                  
-                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    Upload your CSV file with book specifications to start generating high-quality, AI-powered books tailored to your niche and target audience.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mx-auto mb-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-4xl mx-auto mb-8">
                     <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200">
-                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <Upload className="h-6 w-6 text-white" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                       </div>
-                      <h4 className="font-semibold text-green-800 mb-1">Upload CSV</h4>
-                      <p className="text-sm text-green-700">Provide book specifications in CSV format</p>
+                      <h4 className="font-semibold text-green-800 mb-1 text-sm sm:text-base">Write Prompt</h4>
+                      <p className="text-xs sm:text-sm text-green-700">Describe your book idea and topic</p>
                     </div>
                     
                     <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200">
-                      <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <Sparkles className="h-6 w-6 text-white" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                       </div>
-                      <h4 className="font-semibold text-blue-800 mb-1">AI Generation</h4>
-                      <p className="text-sm text-blue-700">AI creates comprehensive book content</p>
+                      <h4 className="font-semibold text-blue-800 mb-1 text-sm sm:text-base">AI Generation</h4>
+                      <p className="text-xs sm:text-sm text-blue-700">AI creates comprehensive book content</p>
                     </div>
                     
                     <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
-                      <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <Download className="h-6 w-6 text-white" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Download className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                       </div>
-                      <h4 className="font-semibold text-purple-800 mb-1">Download</h4>
-                      <p className="text-sm text-purple-700">Get your professionally formatted books</p>
+                      <h4 className="font-semibold text-purple-800 mb-1 text-sm sm:text-base">Download</h4>
+                      <p className="text-xs sm:text-sm text-purple-700">Get your professionally formatted book</p>
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-center gap-4">
-                    <Button 
-                      variant="outline" 
-                      onClick={downloadCSVTemplate}
-                      className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Template
-                    </Button>
-                    
+                  <div className="text-center">
                     <div className="text-sm text-gray-500">
-                      or drag & drop your CSV file above
+                      Start by entering your book prompt above
                     </div>
                   </div>
                 </div>
                 
-                <div className="mt-8 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <div className="mt-8 p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm sm:text-base">
                     <Target className="h-4 w-4 text-blue-600" />
                     What You'll Get
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -914,7 +1000,7 @@ export const CreateBook: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-gray-700">Batch processing capability</span>
+                        <span className="text-gray-700">Professional formatting</span>
                       </div>
                     </div>
                   </div>
@@ -927,41 +1013,42 @@ export const CreateBook: React.FC = () => {
 
       {/* Book View Modal */}
       {showBookView && selectedBook && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b">
-              <div>
-                <h2 className="text-2xl font-bold">{selectedBook.title}</h2>
-                <p className="text-muted-foreground">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 border-b gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg sm:text-2xl font-bold line-clamp-2">{selectedBook.title}</h2>
+                <p className="text-muted-foreground text-sm sm:text-base">
                   {selectedBook.niche} • {selectedBook.targetAudience} • {selectedBook.wordCount.toLocaleString()} words
                 </p>
               </div>
-              <Button variant="outline" onClick={closeBookView}>
+              <Button variant="outline" onClick={closeBookView} className="flex-shrink-0">
                 <X className="h-4 w-4" />
               </Button>
             </div>
             
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
               <div className="prose max-w-none">
-                <div className="whitespace-pre-line text-sm leading-relaxed">
+                <div className="whitespace-pre-line text-xs sm:text-sm leading-relaxed">
                   {selectedBook.content}
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center justify-between p-6 border-t bg-gray-50">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 border-t bg-gray-50 gap-3">
+              <div className="text-xs sm:text-sm text-muted-foreground">
                 Generated on {new Date(selectedBook.createdAt).toLocaleDateString()}
               </div>
               <div className="flex items-center gap-2">
                 <Button 
                   variant="outline" 
                   onClick={() => handleDownloadGeneratedBook(selectedBook)}
+                  size="sm"
                 >
-                  <Download className="h-4 w-4 mr-2" />
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
                   Download Book
                 </Button>
-                <Button onClick={closeBookView}>
+                <Button onClick={closeBookView} size="sm">
                   Close
                 </Button>
               </div>
@@ -977,6 +1064,7 @@ export const CreateBook: React.FC = () => {
         requiredFeature="Book Creation"
         currentPlan={user?.subscription?.plan || 'free'}
       />
+      </div>
     </div>
   );
 };
