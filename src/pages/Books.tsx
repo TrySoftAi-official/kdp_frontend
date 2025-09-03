@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Filter, Download, Search, Eye, Edit, Trash2, BookOpen, Calendar, DollarSign, TrendingUp } from 'lucide-react';
+import { Upload, Filter, Search, Eye, Edit, Trash2, BookOpen, DollarSign, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Book } from '@/types';
-import { booksApi } from '@/lib/api';
-import { useAuth } from '@/hooks/useAuth';
+
+
 
 // Extended Book interface to include more fields
 interface ExtendedBook extends Book {
@@ -23,7 +23,7 @@ export const Books: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const { user } = useAuth();
+
 
   // Sample books data
   const sampleBooks: ExtendedBook[] = [

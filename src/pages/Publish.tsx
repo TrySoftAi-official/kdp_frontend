@@ -10,13 +10,13 @@ import { Separator } from '@/components/ui/separator';
 import { 
   BookOpen, 
   Upload, 
-  Settings, 
+ 
   Globe, 
   DollarSign, 
-  Target,
+
   CheckCircle,
   AlertCircle,
-  ExternalLink,
+
   Download,
   Eye,
   Edit
@@ -47,7 +47,7 @@ interface BookForPublishing {
 export const Publish: React.FC = () => {
   const [books, setBooks] = useState<BookForPublishing[]>([]);
   const [selectedBook, setSelectedBook] = useState<BookForPublishing | null>(null);
-  const [activeTab, setActiveTab] = useState('overview');
+
 
   useEffect(() => {
     // Load saved books from localStorage

@@ -14,7 +14,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   allowedRoles,
   fallbackPath = '/login'
 }) => {
-  const { isAuthenticated, user, canAccess } = useAuth();
+  const { isAuthenticated, canAccess } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to={fallbackPath} replace />;

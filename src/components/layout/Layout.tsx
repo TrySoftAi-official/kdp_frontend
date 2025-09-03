@@ -3,10 +3,10 @@ import { Outlet } from 'react-router-dom';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { useUIStore } from '@/stores/uiStore';
-import { cn } from '@/lib/utils';
+
 
 export const Layout: React.FC = () => {
-  const { theme, sidebarCollapsed } = useUIStore();
+  const { theme } = useUIStore();
 
   useEffect(() => {
     // Apply theme to document

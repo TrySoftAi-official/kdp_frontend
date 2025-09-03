@@ -86,10 +86,10 @@ const devAutoLogin = () => {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       ...devAutoLogin(),
 
-      login: async (email: string, password?: string) => {
+      login: async (_email: string, _password?: string) => {
         set({ isLoading: true });
         
         try {
@@ -97,7 +97,7 @@ export const useAuthStore = create<AuthState>()(
           await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Mock authentication - find user by email
-          const user = mockUsers.find(u => u.email === email);
+          const user = mockUsers.find(u => u.email === _email);
           
           if (user) {
             set({ 
@@ -109,8 +109,8 @@ export const useAuthStore = create<AuthState>()(
             // Create a guest user for demo purposes
             const guestUser: User = {
               id: Date.now().toString(),
-              email,
-              name: email.split('@')[0],
+              email: _email,
+              name: _email.split('@')[0],
               role: 'guest'
             };
             

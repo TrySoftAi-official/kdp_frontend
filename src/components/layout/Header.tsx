@@ -39,10 +39,7 @@ export const Header: React.FC = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleSearch = (query: string) => {
-    // Implement global search functionality
-    console.log('Global search:', query);
-  };
+
 
   const getInitials = (name: string) => {
     return name

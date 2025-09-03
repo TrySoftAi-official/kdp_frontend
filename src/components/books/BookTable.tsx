@@ -254,7 +254,7 @@ export const BookTable: React.FC<BookTableProps> = ({
                           <Eye className="mr-2 h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
-                        {canWrite && (
+                        {canWrite() && (
                           <DropdownMenuItem onClick={(e) => {
                             e.stopPropagation();
                             // Handle edit
@@ -263,7 +263,7 @@ export const BookTable: React.FC<BookTableProps> = ({
                             Edit
                           </DropdownMenuItem>
                         )}
-                        {book.status === 'failed' && canWrite && (
+                        {book.status === 'failed' && canWrite() && (
                           <DropdownMenuItem onClick={(e) => {
                             e.stopPropagation();
                             handleRetry(book);

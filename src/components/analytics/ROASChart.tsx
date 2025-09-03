@@ -94,7 +94,7 @@ export const ROASChart: React.FC<ROASChartProps> = ({
                 y={4} 
                 stroke={CHART_COLORS.warning}
                 strokeDasharray="5 5" 
-                label={{ value: "Target (4.0x)", position: "topRight" }}
+                label={{ value: "Target (4.0x)", position: "right" }}
               />
               
               {/* Average ROAS line */}
@@ -102,7 +102,7 @@ export const ROASChart: React.FC<ROASChartProps> = ({
                 y={avgROAS} 
                 stroke={CHART_COLORS.info}
                 strokeDasharray="3 3" 
-                label={{ value: `Avg (${avgROAS.toFixed(1)}x)`, position: "topLeft" }}
+                label={{ value: `Avg (${avgROAS.toFixed(1)}x)`, position: "left" }}
               />
               
               <Line 

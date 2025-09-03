@@ -5,18 +5,12 @@ import {
   Book,
   BookOpen,
   Megaphone,
-  FileImage,
   Home,
-  Settings,
-  Tag,
   User,
-  Eye,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   TrendingUp,
-  Shield,
-  Zap
+  Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';

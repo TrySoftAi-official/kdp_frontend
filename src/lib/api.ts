@@ -1,5 +1,5 @@
 import { ApiResponse, PaginatedResponse, Book, Metric, Event, Campaign, Niche, ChartData, FilterOptions, SortOptions } from '@/types';
-import { generateId, calculateROAS, calculateACOS } from './utils';
+import { calculateROAS } from './utils';
 
 // Mock data for development
 const mockBooks: Book[] = [
@@ -48,7 +48,7 @@ const mockBooks: Book[] = [
     date: '2024-01-20',
     author: 'Chef Maria',
     genre: 'Cooking',
-    publishedAt: null,
+    publishedAt: undefined,
     lastUpdated: '2024-01-23T16:30:00Z'
   },
   {
@@ -128,7 +128,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Authentication API
 export const authApi = {
-  login: async (email: string, password?: string): Promise<ApiResponse<{ token: string }>> => {
+  login: async (_email: string, _password?: string): Promise<ApiResponse<{ token: string }>> => {
     await delay(1000);
     return {
       success: true,
@@ -203,7 +203,7 @@ export const booksApi = {
     };
   },
 
-  uploadCSV: async (file: File): Promise<ApiResponse<{ processed: number; failed: number }>> => {
+  uploadCSV: async (_file: File): Promise<ApiResponse<{ processed: number; failed: number }>> => {
     await delay(2000);
     
     // Simulate processing
@@ -230,6 +230,7 @@ export const booksApi = {
     
     return {
       success: false,
+      data: null as any,
       error: 'Book not found'
     };
   }

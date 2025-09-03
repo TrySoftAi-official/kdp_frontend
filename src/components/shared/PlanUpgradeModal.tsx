@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, Crown, Star, Zap, BarChart3, BookOpen, MessageCircle, Palette, Code } from 'lucide-react';
+import { Check, Crown, Star, Zap, BarChart3, MessageCircle } from 'lucide-react';
 import { SUBSCRIPTION_PLANS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -28,14 +28,7 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
     onClose();
   };
 
-  const getFeatureIcon = (feature: string) => {
-    if (feature.includes('analytics')) return <BarChart3 className="h-4 w-4" />;
-    if (feature.includes('book')) return <BookOpen className="h-4 w-4" />;
-    if (feature.includes('support')) return <MessageCircle className="h-4 w-4" />;
-    if (feature.includes('branding')) return <Palette className="h-4 w-4" />;
-    if (feature.includes('API')) return <Code className="h-4 w-4" />;
-    return <Check className="h-4 w-4" />;
-  };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

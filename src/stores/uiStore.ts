@@ -23,7 +23,7 @@ interface Notification {
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       theme: 'light',
       sidebarCollapsed: true, // Start collapsed on mobile
       notifications: [

@@ -10,8 +10,8 @@ import {
   Zap
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { RoleBased } from '@/components/shared/RoleBased';
 import { useUIStore } from '@/stores/uiStore';
+import { UserRole } from '@/types';
 
 interface QuickAction {
   label: string;
@@ -19,7 +19,7 @@ interface QuickAction {
   icon: React.ComponentType<{ className?: string }>;
   action: () => void;
   variant?: 'default' | 'secondary' | 'outline';
-  roles?: string[];
+  roles?: UserRole[];
 }
 
 export const QuickActions: React.FC = () => {

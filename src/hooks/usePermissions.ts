@@ -4,10 +4,10 @@ import { ROLE_PERMISSIONS, SUBSCRIPTION_PLANS } from '@/lib/constants';
 export const usePermissions = () => {
   const { user } = useAuth();
 
-  const canAccessFeature = (feature: keyof typeof ROLE_PERMISSIONS.admin>) => {
+  const canAccessFeature = (feature: keyof typeof ROLE_PERMISSIONS.admin) => {
     if (!user) return false;
     
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
+    const rolePermissions = ROLE_PERMISSIONS[user.role as keyof typeof ROLE_PERMISSIONS];
     if (!rolePermissions) return false;
     
     return rolePermissions[feature];
