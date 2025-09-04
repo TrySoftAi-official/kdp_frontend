@@ -15,8 +15,6 @@ import {
   Save,
   Eye,
   Target,
-  Upload,
-  FileSpreadsheet,
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -56,14 +54,10 @@ interface BookPrompt {
 
 export const CreateBook: React.FC = () => {
   const { user } = useAuth();
-  const [bookPrompts, setBookPrompts] = useState<BookPrompt[]>([]);
   const [currentPrompt, setCurrentPrompt] = useState<BookPrompt | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<GenerationStep[]>([]);
   const [generatedBooks, setGeneratedBooks] = useState<GeneratedBook[]>([]);
-  const [currentBookIndex, setCurrentBookIndex] = useState(0);
-  const [uploadError, setUploadError] = useState<string>('');
   const [selectedBook, setSelectedBook] = useState<GeneratedBook | null>(null);
   const [showBookView, setShowBookView] = useState(false);
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
@@ -97,11 +91,6 @@ export const CreateBook: React.FC = () => {
     }
   }, [currentPrompt]);
 
-  const handlePromptSubmit = (prompt: BookPrompt) => {
-    setCurrentPrompt(prompt);
-    setBookPrompts(prev => [...prev, prompt]);
-    setUploadError('');
-  };
 
   const createBookPrompt = (promptData: Omit<BookPrompt, 'id' | 'createdAt'>) => {
     const newPrompt: BookPrompt = {
@@ -124,7 +113,6 @@ export const CreateBook: React.FC = () => {
 
     setIsGenerating(true);
     setGeneratedBooks([]);
-    setCurrentBookIndex(0);
 
     // Initialize generation steps
     const steps: GenerationStep[] = [
@@ -138,7 +126,6 @@ export const CreateBook: React.FC = () => {
     setGenerationSteps(steps);
 
     // Process the book generation
-    setCurrentBookIndex(0);
 
       // Simulate the generation process
       for (let i = 0; i < steps.length; i++) {
@@ -199,7 +186,7 @@ export const CreateBook: React.FC = () => {
         return content;
       };
 
-      const getChapterTitle = (chapterNum: number, niche: string, targetAudience: string): string => {
+      const getChapterTitle = (chapterNum: number, niche: string, _targetAudience: string): string => {
         const titles = {
           1: `Introduction to ${niche}`,
           2: `Understanding the Fundamentals`,
