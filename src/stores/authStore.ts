@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User } from '@/types';
+import { authApi, LoginCredentials, apiClient } from '@/api';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;
   setUser: (user: User) => void;
@@ -89,37 +90,31 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       ...devAutoLogin(),
 
-      login: async (_email: string, _password?: string) => {
+      login: async (email: string, password: string) => {
         set({ isLoading: true });
         
         try {
-          // Simulate API call delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          const credentials: LoginCredentials = { email, password };
+          const response = await authApi.login(credentials);
           
-          // Mock authentication - find user by email
-          const user = mockUsers.find(u => u.email === _email);
-          
-          if (user) {
-            set({ 
-              user, 
-              isAuthenticated: true, 
-              isLoading: false 
-            });
-          } else {
-            // Create a guest user for demo purposes
-            const guestUser: User = {
-              id: Date.now().toString(),
-              email: _email,
-              name: _email.split('@')[0],
-              role: 'guest'
-            };
-            
-            set({ 
-              user: guestUser, 
-              isAuthenticated: true, 
-              isLoading: false 
-            });
+          // Store the token in localStorage
+          if (response.data.access_token) {
+            localStorage.setItem('access_token', response.data.access_token);
           }
+          
+          // Set user data from response
+          const user = response.data.user || {
+            id: Date.now().toString(),
+            email: email,
+            name: email.split('@')[0],
+            role: 'user'
+          };
+          
+          set({ 
+            user, 
+            isAuthenticated: true, 
+            isLoading: false 
+          });
         } catch (error) {
           set({ isLoading: false });
           throw new Error('Login failed');
@@ -130,34 +125,28 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         
         try {
-          // Simulate Google OAuth
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          
-          const user: User = {
-            id: Date.now().toString(),
-            email: 'user@gmail.com',
-            name: 'Google User',
-            role: 'marketer',
-            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=32&h=32&fit=crop&crop=face'
-          };
-          
-          set({ 
-            user, 
-            isAuthenticated: true, 
-            isLoading: false 
-          });
+          // Redirect to Google OAuth
+          window.location.href = `${apiClient.defaults.baseURL}/auth/google/login`;
         } catch (error) {
           set({ isLoading: false });
           throw new Error('Google login failed');
         }
       },
 
-      logout: () => {
-        set({ 
-          user: null, 
-          isAuthenticated: false, 
-          isLoading: false 
-        });
+      logout: async () => {
+        try {
+          await authApi.logout();
+        } catch (error) {
+          console.error('Logout API call failed:', error);
+        } finally {
+          // Clear token and reset state
+          localStorage.removeItem('access_token');
+          set({ 
+            user: null, 
+            isAuthenticated: false, 
+            isLoading: false 
+          });
+        }
       },
 
       setUser: (user: User) => {

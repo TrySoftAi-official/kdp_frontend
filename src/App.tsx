@@ -4,6 +4,7 @@ import { Layout } from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Dashboard } from '@/pages/Dashboard';
 import { Login } from '@/pages/Login';
+import { CheckEmail } from '@/pages/CheckEmail';
 import { CreateBook } from '@/pages/CreateBook';
 import { Books } from '@/pages/Books';
 import { Analytics } from '@/pages/Analytics';
@@ -15,6 +16,7 @@ function AppContent() {
     <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
+      <Route path="/check-email" element={<CheckEmail />} />
 
       {/* Protected routes with Layout */}
       <Route

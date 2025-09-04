@@ -5,11 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
+import { authApi } from '@/api';
+import { useNavigate } from 'react-router-dom';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
-  const { login, loginWithGoogle, isAuthenticated, isLoading } = useAuth();
+  const [message, setMessage] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+  const { loginWithGoogle, isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   // Redirect if already authenticated
   if (isAuthenticated) {
@@ -19,24 +23,54 @@ export const Login: React.FC = () => {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setError('Please enter your email address');
+      setMessage('Please enter your email address');
+      setIsSuccess(false);
       return;
     }
 
     try {
-      setError('');
-      await login(email);
+      setMessage('');
+      setIsSuccess(false);
+      console.log('Sending passwordless login request for:', email);
+      
+             // Call the API
+       console.log('🔍 Making Axios API call to:', `http://127.0.0.1:8000/auth/passwordless-login/request`);
+       console.log('🔍 Request payload:', { email });
+       
+       const response = await authApi.passwordlessLoginRequest(email);
+       console.log('✅ Passwordless login response:', response);
+       console.log('✅ Response status:', response?.status);
+       console.log('✅ Response data:', response?.data);
+       console.log('✅ Response headers:', response?.headers);
+      
+      // If we get here, the API call was successful
+      console.log('✅ API call successful, navigating to check-email...');
+      
+      // Try React Router navigation first
+      try {
+        navigate('/check-email', { state: { email } });
+        console.log('✅ React Router navigation successful');
+      } catch (navError) {
+        console.error('❌ React Router navigation failed:', navError);
+        // Fallback to window.location
+        console.log('🔄 Using fallback navigation...');
+        window.location.href = '/check-email';
+      }
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      console.error('Passwordless login error:', err);
+      setMessage(err instanceof Error ? err.message : 'Failed to send magic link');
+      setIsSuccess(false);
     }
   };
 
   const handleGoogleLogin = async () => {
     try {
-      setError('');
+      setMessage('');
       await loginWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google login failed');
+      setMessage(err instanceof Error ? err.message : 'Google login failed');
+      setIsSuccess(false);
     }
   };
 
@@ -49,16 +83,43 @@ export const Login: React.FC = () => {
     };
 
     try {
-      setError('');
-      await login(demoEmails[role as keyof typeof demoEmails]);
+      setMessage('');
+      setIsSuccess(false);
+      const demoEmail = demoEmails[role as keyof typeof demoEmails];
+      console.log('Sending demo login request for role:', role, 'email:', demoEmail);
+      
+             // Call the API
+       console.log('🔍 Making Axios API call for demo to:', `http://127.0.0.1:8000/auth/passwordless-login/request`);
+       console.log('🔍 Demo request payload:', { email: demoEmail });
+       
+       const response = await authApi.passwordlessLoginRequest(demoEmail);
+       console.log('✅ Demo login response:', response);
+      
+      // If we get here, the API call was successful
+      console.log('✅ Demo API call successful, navigating to check-email...');
+      
+      // Try React Router navigation first
+      try {
+        navigate('/check-email', { state: { email: demoEmail } });
+        console.log('✅ Demo React Router navigation successful');
+      } catch (navError) {
+        console.error('❌ Demo React Router navigation failed:', navError);
+        // Fallback to window.location
+        console.log('🔄 Using fallback navigation for demo...');
+        window.location.href = '/check-email';
+      }
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Demo login failed');
+      console.error('Demo login error:', err);
+      setMessage(err instanceof Error ? err.message : 'Demo login failed');
+      setIsSuccess(false);
     }
-  };
+  }; 
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className=" max-w-md space-y-6">
         {/* Logo */}
         <div className="text-center">
           <div className="mx-auto h-16 w-16 rounded-full bg-primary flex items-center justify-center mb-4">
@@ -76,9 +137,13 @@ export const Login: React.FC = () => {
             <CardTitle>Sign In</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {error && (
-              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                {error}
+            {message && (
+              <div className={`p-3 text-sm rounded-md border ${
+                isSuccess 
+                  ? 'text-green-600 bg-green-50 border-green-200' 
+                  : 'text-red-600 bg-red-50 border-red-200'
+              }`}>
+                {message}
               </div>
             )}
 
@@ -185,6 +250,105 @@ export const Login: React.FC = () => {
               >
                 Guest Demo
               </Button>
+            </div>
+            
+            {/* Test Navigation Button */}
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log('Testing navigation to check-email...');
+                  navigate('/check-email', { state: { email: 'test@example.com' } });
+                }}
+                className="w-full"
+              >
+                Test Navigation to Check Email
+              </Button>
+              
+                            {/* Test Backend Connection */}
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      console.log('Testing backend connection...');
+                      
+                      // Test 1: Basic connection
+                      console.log('🔍 Testing basic connection to port 8000...');
+                      const response = await fetch('http://127.0.0.1:8000/health');
+                      console.log('✅ Backend response:', response);
+                      if (response.ok) {
+                        alert('✅ Backend is connected on port 8000!');
+                      } else {
+                        alert('⚠️ Backend responded but with error');
+                      }
+                    } catch (error) {
+                      console.error('❌ Backend connection test failed:', error);
+                      
+                      // Test 2: Try different ports
+                      console.log('🔍 Trying alternative ports...');
+                      try {
+                        const response5000 = await fetch('http://127.0.0.1:5000/health');
+                        if (response5000.ok) {
+                          alert('✅ Backend found on port 5000! Update your API client.');
+                          return;
+                        }
+                      } catch (e) {
+                        console.log('Port 5000 not accessible');
+                      }
+                      
+                      try {
+                        const response3000 = await fetch('http://127.0.0.1:3000/health');
+                        if (response3000.ok) {
+                          alert('✅ Backend found on port 3000! Update your API client.');
+                          return;
+                        }
+                      } catch (e) {
+                        console.log('Port 3000 not accessible');
+                      }
+                      
+                      alert('❌ Cannot connect to backend on ports 8000, 5000, or 3000.\n\nCheck:\n1. Is your backend running?\n2. What port is it actually using?\n3. Are there CORS issues?');
+                    }
+                  }}
+                  className="w-full"
+                >
+                  Test Backend Connection
+                </Button>
+                
+                {/* Test Actual API Endpoint */}
+                <div className="pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        console.log('🔍 Testing actual API endpoint...');
+                        const response = await fetch('http://127.0.0.1:8000/auth/passwordless-login/request', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ email: 'test@example.com' })
+                        });
+                        console.log('✅ API endpoint response:', response);
+                        if (response.ok) {
+                          alert('✅ Your API endpoint is working! The issue is in the frontend API call.');
+                        } else {
+                          alert('⚠️ API endpoint responded but with error status: ' + response.status);
+                        }
+                      } catch (error) {
+                        console.error('❌ API endpoint test failed:', error);
+                        alert('❌ Cannot reach your API endpoint. This confirms the connection issue.');
+                      }
+                    }}
+                    className="w-full"
+                  >
+                    Test Actual API Endpoint
+                  </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
