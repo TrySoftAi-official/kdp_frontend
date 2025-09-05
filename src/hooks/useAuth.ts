@@ -1,17 +1,21 @@
 import { useAuthStore } from '@/stores/authStore';
 import { UserRole } from '@/types';
 import { ROLES } from '@/lib/constants';
+import { authApi } from '@/api/authApi';
 
 export const useAuth = () => {
   const {
     user,
     isAuthenticated,
     isLoading,
-    login,
+    error,
     loginWithGoogle,
     logout,
     setUser,
-    setLoading
+    setLoading,
+    setError,
+    clearError,
+    initializeAuth
   } = useAuthStore();
 
   const hasPermission = (permission: string): boolean => {
@@ -55,15 +59,71 @@ export const useAuth = () => {
     return hasPermission('manage_campaigns');
   };
 
+  const sendPasswordlessLink = async (email: string): Promise<void> => {
+    setLoading(true);
+    clearError();
+    
+    try {
+      const response = await authApi.passwordlessLoginRequest(email);
+      console.log('Passwordless link request successful:', response);
+      // Don't throw error if the request was successful
+    } catch (error: any) {
+      console.error('Passwordless link request failed:', error);
+      const errorMessage = error.message || 'Failed to send magic link';
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyPasswordlessToken = async (token: string): Promise<void> => {
+    setLoading(true);
+    clearError();
+    
+    try {
+      const data = await authApi.passwordlessLogin(token);
+      setUser(data.user);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Magic link verification failed';
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleCallback = async (code: string, state?: string): Promise<void> => {
+    setLoading(true);
+    clearError();
+    
+    try {
+      const data = await authApi.googleCallback(code, state);
+      setUser(data.user);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Google authentication failed';
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     user,
     isAuthenticated,
     isLoading,
-    login,
+    error,
     loginWithGoogle,
     logout,
     setUser,
     setLoading,
+    setError,
+    clearError,
+    initializeAuth,
+    sendPasswordlessLink,
+    verifyPasswordlessToken,
+    handleGoogleCallback,
     hasPermission,
     hasRole,
     canAccess,
