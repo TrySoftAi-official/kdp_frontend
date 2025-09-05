@@ -2,16 +2,18 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { authApi } from '@/api/authApi';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export const GoogleCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const code = searchParams.get('code') || '';
-  const state = searchParams.get('state') || '';
+  const accessToken = searchParams.get('access_token') || '';
+  const refreshToken = searchParams.get('refresh_token') || '';
+  const userEmail = searchParams.get('user') || '';
   const error = searchParams.get('error') || '';
   const navigate = useNavigate();
-  const { handleGoogleCallback, error: authError } = useAuth();
+  const { setUser, error: authError } = useAuth();
   const [verificationStatus, setVerificationStatus] = useState<'loading' | 'success' | 'error'>('loading');
 
   useEffect(() => {
@@ -23,13 +25,27 @@ export const GoogleCallback: React.FC = () => {
         return;
       }
 
-      if (!code) {
+      // Check if we have tokens from the backend
+      if (!accessToken || !refreshToken) {
         setVerificationStatus('error');
         return;
       }
       
       try {
-        await handleGoogleCallback(code, state);
+        // Create a user object from the email
+        const user = {
+          email: userEmail,
+          id: '0', // Will be set by the backend
+          role: 'user' as const, // Default role
+          name: userEmail.split('@')[0], // Use email prefix as name
+          username: userEmail.split('@')[0] // Use email prefix as username
+        };
+        
+        // Set the tokens and user directly
+        authApi.setTokensDirectly(accessToken, refreshToken, user);
+        setUser(user);
+        console.log(user);
+        
         setVerificationStatus('success');
         // Navigate to dashboard after a short delay
         setTimeout(() => {
@@ -42,11 +58,11 @@ export const GoogleCallback: React.FC = () => {
     };
     
     verify();
-  }, [code, state, error, navigate, handleGoogleCallback]);
+  }, [accessToken, refreshToken, userEmail, error, navigate, setUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
-      <div className="max-w-md w-full text-center space-y-6">
+      <div className="max-w-md text-center space-y-6">
         <div className="mx-auto h-16 w-16 rounded-full bg-primary flex items-center justify-center mb-4">
           {verificationStatus === 'loading' && <Loader2 className="h-7 w-7 text-white animate-spin" />}
           {verificationStatus === 'success' && <CheckCircle className="h-7 w-7 text-white" />}

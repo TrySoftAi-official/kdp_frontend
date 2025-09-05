@@ -69,6 +69,7 @@ export const useAuth = () => {
       // Don't throw error if the request was successful
     } catch (error: any) {
       console.error('Passwordless link request failed:', error);
+      // Since we've made the API more robust, this should rarely happen
       const errorMessage = error.message || 'Failed to send magic link';
       setError(errorMessage);
       throw error;
@@ -78,13 +79,52 @@ export const useAuth = () => {
   };
 
   const verifyPasswordlessToken = async (token: string): Promise<void> => {
+    console.log('useAuth: verifyPasswordlessToken called with token:', token);
     setLoading(true);
     clearError();
     
     try {
+      console.log('useAuth: Calling authApi.passwordlessLogin');
       const data = await authApi.passwordlessLogin(token);
+      console.log('useAuth: API response data:', data);
       setUser(data.user);
+      console.log('useAuth: User set successfully');
     } catch (error: any) {
+      console.error('useAuth: Error in verifyPasswordlessToken:', error);
+      
+      // Try fallback with direct fetch if axios fails
+      if (error.message?.includes('timeout') || error.code === 'ECONNABORTED') {
+        console.log('useAuth: Axios failed, trying direct fetch...');
+        try {
+          const response = await fetch('http://127.0.0.1:8000/auth/passwordless-login/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          console.log('useAuth: Fetch response data:', data);
+          
+          if (data.access_token && data.refresh_token && data.user) {
+            // Store tokens manually
+            localStorage.setItem('accessToken', data.access_token);
+            localStorage.setItem('refreshToken', data.refresh_token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            setUser(data.user);
+            console.log('useAuth: User set successfully via fetch');
+            return;
+          }
+        } catch (fetchError: any) {
+          console.error('useAuth: Fetch fallback also failed:', fetchError);
+        }
+      }
+      
       const errorMessage = error.message || 'Magic link verification failed';
       setError(errorMessage);
       throw error;

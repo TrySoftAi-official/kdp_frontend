@@ -19,16 +19,21 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
 
       initializeAuth: () => {
+        console.log('AuthStore: Initializing authentication state');
         const user = authApi.getCurrentUser();
+        console.log('AuthStore: Retrieved user from storage:', user);
         if (user) {
           set({ user, isAuthenticated: true });
+          console.log('AuthStore: User authenticated on initialization');
+        } else {
+          console.log('AuthStore: No user found in storage');
         }
       },
 
@@ -36,12 +41,8 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Get the current origin for the callback URL
-          const currentOrigin = window.location.origin;
-          const callbackUrl = `${currentOrigin}/auth/google/callback`;
-          
-          // Call the backend to get the Google OAuth URL with client_id
-          const response = await fetch(`http://127.0.0.1:8000/auth/google/login?redirect_uri=${encodeURIComponent(callbackUrl)}&client_id=689538806669-43m7n7tg2c3vfrmt527k6nr51no72tmj.apps.googleusercontent.com`);
+          // Call the backend to get the Google OAuth URL
+          const response = await fetch(`http://127.0.0.1:8000/auth/google/login`);
           const data = await response.json();
           
           if (data.auth_url) {
@@ -76,7 +77,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setUser: (user: User) => {
+        console.log('AuthStore: Setting user and authentication state:', user);
         set({ user, isAuthenticated: true, error: null });
+        console.log('AuthStore: User and authentication state set successfully');
       },
 
       setLoading: (isLoading: boolean) => {
