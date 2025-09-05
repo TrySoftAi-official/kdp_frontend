@@ -42,6 +42,7 @@ export const Header: React.FC = () => {
 
 
   const getInitials = (name: string) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map(n => n[0])
@@ -236,7 +237,7 @@ export const Header: React.FC = () => {
                 <Avatar className="h-9 w-9">
                   <AvatarImage src={user?.avatar} alt={user?.name} />
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-medium">
-                    {user?.name ? getInitials(user.name) : <User className="h-5 w-5" />}
+                    {user?.name || user?.username ? getInitials(user.name || user.username) : <User className="h-5 w-5" />}
                   </AvatarFallback>
                 </Avatar>
               </Button>
@@ -249,11 +250,11 @@ export const Header: React.FC = () => {
                     <Avatar className="h-12 w-12 border-2 border-white shadow-sm">
                       <AvatarImage src={user?.avatar} alt={user?.name} />
                       <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold">
-                        {user?.name ? getInitials(user.name) : <User className="h-6 w-6" />}
+                        {user?.name || user?.username ? getInitials(user.name || user.username) : <User className="h-6 w-6" />}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{user?.name || user?.username || user?.email}</p>
                       <p className="text-xs text-gray-600 truncate">{user?.email}</p>
                       <div className="flex items-center gap-1 mt-1">
                         {getRoleIcon(user?.role || '')}
@@ -305,7 +306,7 @@ export const Header: React.FC = () => {
               <DropdownMenuSeparator />
 
               {/* Development Section */}
-              <div className="p-2">
+              {/* <div className="p-2">
                 <DropdownMenuLabel className="text-xs font-medium text-gray-500 px-3 py-2">
                   Development Tools
                 </DropdownMenuLabel>
@@ -318,7 +319,7 @@ export const Header: React.FC = () => {
                   </div>
                   <span>Switch to Admin Role</span>
                 </DropdownMenuItem>
-              </div>
+              </div> */}
 
               <DropdownMenuSeparator />
 

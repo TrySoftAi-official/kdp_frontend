@@ -210,11 +210,11 @@ export const Sidebar: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                     <span className="text-sm font-semibold text-white">
-                      {user.name.charAt(0).toUpperCase()}
+                      {/* {(user.name || user.username || user.email || 'U').charAt(0).toUpperCase()} */}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{user.name || user.username || user.email}</p>
                     <div className="flex items-center gap-1 mt-1">
                       {getRoleIcon(user.role)}
                       <Badge 
@@ -338,7 +338,7 @@ export const Sidebar: React.FC = () => {
                 <div className="flex items-center justify-center">
                   <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                     <span className="text-sm font-semibold text-white">
-                      {user.name.charAt(0).toUpperCase()}
+                      {(user.name || user?.username || user.email || 'U').charAt(0).toUpperCase()}
                     </span>
                   </div>
                 </div>
