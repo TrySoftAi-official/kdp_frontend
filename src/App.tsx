@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Dashboard } from '@/pages/Dashboard';
 import { Login } from '@/pages/Login';
 import { CheckEmail } from '@/pages/CheckEmail';
@@ -14,6 +15,7 @@ import { Books } from '@/pages/Books';
 import { Analytics } from '@/pages/Analytics';
 import { Publish } from '@/pages/Publish';
 import { Account } from '@/pages/Account';
+import { DynamicApiDemo } from '@/components/DynamicApiDemo';
 import { useAuth } from '@/hooks/useAuth';
 
 function AppContent() {
@@ -58,6 +60,7 @@ function AppContent() {
         />
         <Route path="publish" element={<Publish />} />
         <Route path="account" element={<Account />} />
+        <Route path="api-demo" element={<DynamicApiDemo />} />
         
         {/* Catch all route */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -68,9 +71,11 @@ function AppContent() {
 
 function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <AppContent />
+      </Router>
+    </ErrorBoundary>
   );
 }
 

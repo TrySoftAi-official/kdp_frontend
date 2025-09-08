@@ -32,7 +32,7 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="mx-4 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="mx-4 max-w-4xl max-h-[90vh] overflow-y-auto">
         <Card className="border-0 shadow-2xl">
           <CardHeader className="text-center bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
             <div className="flex items-center justify-center mb-4">

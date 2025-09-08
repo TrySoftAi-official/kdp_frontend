@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Filter, Search, Eye, Edit, Trash2, BookOpen, DollarSign, TrendingUp } from 'lucide-react';
+import { Upload, Filter, Search, Eye, Edit, Trash2, BookOpen, DollarSign, TrendingUp, Loader2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Book } from '@/types';
-
-
+import { useDynamicApi } from '@/hooks/useDynamicApi';
+import { useApi } from '@/hooks/useApi';
+import { ApiErrorHandler } from '@/components/ApiErrorHandler';
+import { toast } from '@/lib/toast';
 
 // Extended Book interface to include more fields
 interface ExtendedBook extends Book {
@@ -19,160 +21,55 @@ interface ExtendedBook extends Book {
 }
 
 export const Books: React.FC = () => {
-  const [books, setBooks] = useState<ExtendedBook[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(12);
 
+  // Initialize dynamic API
+  const {
+    isLoading,
+    isError,
+    error,
+    isRefetching,
+    books: booksApi,
+    retry
+  } = useDynamicApi({
+    enableAutoRefresh: true,
+    refreshInterval: 30000,
+    enableErrorNotifications: true,
+    enableSuccessNotifications: true
+  });
 
-  // Sample books data
-  const sampleBooks: ExtendedBook[] = [
-    {
-      id: '1',
-      title: 'The Complete Guide to Healthy Eating',
-      status: 'published',
-      revenue: 2450.50,
-      adSpend: 850.00,
-      roas: 2.88,
-      acos: 34.7,
-      kenp: 1250,
-      country: 'US',
-      date: '2024-01-15',
-      author: 'AI Author',
-      genre: 'Health & Fitness',
-      publishedAt: '2024-01-15T10:30:00Z',
-      lastUpdated: '2024-01-20T14:22:00Z',
-      coverUrl: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&h=600&fit=crop&crop=center',
-      niche: 'Health & Fitness',
-      targetAudience: 'Beginners',
-      wordCount: 8500,
-      content: 'A comprehensive guide to maintaining a healthy diet...'
-    },
-    {
-      id: '2',
-      title: 'Business Success Blueprint',
-      status: 'published',
-      revenue: 3890.75,
-      adSpend: 1200.00,
-      roas: 3.24,
-      acos: 30.8,
-      kenp: 2100,
-      country: 'US',
-      date: '2024-01-10',
-      author: 'AI Author',
-      genre: 'Business',
-      publishedAt: '2024-01-10T09:15:00Z',
-      lastUpdated: '2024-01-18T16:45:00Z',
-      coverUrl: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=600&fit=crop&crop=center',
-      niche: 'Business & Entrepreneurship',
-      targetAudience: 'Entrepreneurs',
-      wordCount: 12000,
-      content: 'Essential strategies for building a successful business...'
-    },
-    {
-      id: '3',
-      title: 'Mindful Parenting Techniques',
-      status: 'saved',
-      revenue: 0,
-      adSpend: 0,
-      roas: 0,
-      acos: 0,
-      kenp: 0,
-      country: 'US',
-      date: '2024-01-25',
-      author: 'AI Author',
-      genre: 'Parenting',
-      savedAt: '2024-01-25T11:20:00Z',
-      coverUrl: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=400&h=600&fit=crop&crop=center',
-      niche: 'Parenting & Family',
-      targetAudience: 'Parents',
-      wordCount: 6500,
-      content: 'Modern approaches to raising happy and confident children...'
-    },
-    {
-      id: '4',
-      title: 'Digital Marketing Mastery',
-      status: 'generated',
-      revenue: 0,
-      adSpend: 0,
-      roas: 0,
-      acos: 0,
-      kenp: 0,
-      country: 'US',
-      date: '2024-01-28',
-      author: 'AI Author',
-      genre: 'Marketing',
-      coverUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=600&fit=crop&crop=center',
-      niche: 'Business & Entrepreneurship',
-      targetAudience: 'Professionals',
-      wordCount: 9500,
-      content: 'Complete guide to modern digital marketing strategies...'
-    },
-    {
-      id: '5',
-      title: 'Quick & Easy Recipes for Busy Families',
-      status: 'processing',
-      revenue: 0,
-      adSpend: 0,
-      roas: 0,
-      acos: 0,
-      kenp: 0,
-      country: 'US',
-      date: '2024-01-30',
-      author: 'AI Author',
-      genre: 'Cooking',
-      coverUrl: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=600&fit=crop&crop=center',
-      niche: 'Cooking & Recipes',
-      targetAudience: 'Parents',
-      wordCount: 7200,
-      content: 'Delicious meals that can be prepared in 30 minutes or less...'
-    },
-    {
-      id: '6',
-      title: 'Financial Freedom Roadmap',
-      status: 'failed',
-      revenue: 0,
-      adSpend: 0,
-      roas: 0,
-      acos: 0,
-      kenp: 0,
-      country: 'US',
-      date: '2024-01-29',
-      author: 'AI Author',
-      genre: 'Finance',
-      coverUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=600&fit=crop&crop=center',
-      niche: 'Finance & Investment',
-      targetAudience: 'Young Adults',
-      wordCount: 8800,
-      content: 'Step-by-step guide to achieving financial independence...'
-    }
-  ];
+  // Get real-time data using React Query hooks
+  const { books: booksHooks } = useApi();
+  const { 
+    data: booksData, 
+    isLoading: booksLoading, 
+    error: booksError,
+    refetch: refetchBooks 
+  } = booksHooks.useBooks(page, limit, {}, { field: 'createdAt', direction: 'desc' });
 
+  // Get books from API data
+  const books = booksData?.books || [];
+  const totalBooks = booksData?.pagination?.total || 0;
+  const totalPages = booksData?.pagination?.totalPages || 1;
+  const loading = booksLoading || isLoading;
+
+  // Auto-refresh data every 30 seconds
   useEffect(() => {
-    const fetchBooks = async () => {
-      try {
-        // Load saved books from localStorage
-        const savedBooks = JSON.parse(localStorage.getItem('savedBooks') || '[]');
-        
-        // Combine saved books with sample data
-        const allBooks = [...sampleBooks, ...savedBooks];
-        setBooks(allBooks);
-      } catch (error) {
-        console.error('Failed to fetch books:', error);
-        // Fallback to sample data
-        setBooks(sampleBooks);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const interval = setInterval(() => {
+      refetchBooks();
+    }, 30000);
 
-    fetchBooks();
-  }, []);
+    return () => clearInterval(interval);
+  }, [refetchBooks]);
 
   const filteredBooks = books.filter(book => {
+    const extendedBook = book as ExtendedBook;
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (book.author && book.author.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (book.niche && book.niche.toLowerCase().includes(searchTerm.toLowerCase()));
+                         (extendedBook.niche && extendedBook.niche.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || book.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -199,24 +96,55 @@ export const Books: React.FC = () => {
     }
   };
 
-  const handleViewBook = (book: ExtendedBook) => {
-    // Implement view book functionality
-    console.log('Viewing book:', book.title);
+  const handleViewBook = async (book: ExtendedBook) => {
+    try {
+      // Implement view book functionality
+      console.log('Viewing book:', book.title);
+      toast.success(`Opening ${book.title}`);
+    } catch (error) {
+      toast.error('Failed to open book');
+    }
   };
 
-  const handleEditBook = (book: ExtendedBook) => {
-    // Implement edit book functionality
-    console.log('Editing book:', book.title);
+  const handleEditBook = async (book: ExtendedBook) => {
+    try {
+      // Implement edit book functionality
+      console.log('Editing book:', book.title);
+      toast.success(`Editing ${book.title}`);
+    } catch (error) {
+      toast.error('Failed to edit book');
+    }
   };
 
-  const handleDeleteBook = (book: ExtendedBook) => {
-    // Implement delete book functionality
-    console.log('Deleting book:', book.title);
+  const handleDeleteBook = async (book: ExtendedBook) => {
+    try {
+      // Use the original hooks for delete operation
+      const deleteMutation = booksHooks.useDeleteBook();
+      await deleteMutation.mutateAsync(book.id);
+      toast.success(`Deleted ${book.title}`);
+      refetchBooks();
+    } catch (error) {
+      toast.error('Failed to delete book');
+    }
   };
 
-  const handlePublishBook = (book: ExtendedBook) => {
-    // Implement publish book functionality
-    console.log('Publishing book:', book.title);
+  const handlePublishBook = async (book: ExtendedBook) => {
+    try {
+      await booksApi.publishBook(book.id, 'kdp');
+      toast.success(`Publishing ${book.title}`);
+      refetchBooks();
+    } catch (error) {
+      toast.error('Failed to publish book');
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      await refetchBooks();
+      toast.success('Books refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh books');
+    }
   };
 
   return (
@@ -231,6 +159,18 @@ export const Books: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            {isRefetching ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh
+          </Button>
           <Button asChild>
             <a href="/create">Create New Book</a>
           </Button>
@@ -240,6 +180,16 @@ export const Books: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Display */}
+      {(isError || booksError) && (
+        <ApiErrorHandler
+          error={error || booksError}
+          onRetry={retry}
+          title="Failed to load books"
+          description="Unable to fetch your books. Please try again."
+        />
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -247,7 +197,7 @@ export const Books: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Books</p>
-                <p className="text-2xl font-bold">{books.length}</p>
+                <p className="text-2xl font-bold">{totalBooks}</p>
               </div>
               <BookOpen className="h-8 w-8 text-blue-600" />
             </div>
@@ -335,7 +285,15 @@ export const Books: React.FC = () => {
       {/* Books Grid */}
       <Card>
         <CardHeader>
-          <CardTitle>Book Catalog ({filteredBooks.length} books)</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Book Catalog ({filteredBooks.length} books)</span>
+            {isRefetching && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Refreshing...
+              </div>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -349,11 +307,11 @@ export const Books: React.FC = () => {
               {filteredBooks.map((book) => (
                 <Card key={book.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <div className="relative">
-                                         <img 
-                       src={book.coverUrl || 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=600&fit=crop&crop=center'} 
-                       alt={book.title}
-                       className="w-full h-48 object-cover"
-                     />
+                    <img 
+                      src={(book as ExtendedBook).coverUrl || 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=600&fit=crop&crop=center'} 
+                      alt={book.title}
+                      className="w-full h-48 object-cover"
+                    />
                     <div className="absolute top-2 right-2">
                       <Badge className={`${getStatusColor(book.status)} border`}>
                         {getStatusIcon(book.status)} {book.status}
@@ -369,9 +327,9 @@ export const Books: React.FC = () => {
                         <span>By {book.author || 'AI Author'}</span>
                       </div>
                       
-                      {book.niche && (
+                      {(book as ExtendedBook).niche && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>{book.niche}</span>
+                          <span>{(book as ExtendedBook).niche}</span>
                         </div>
                       )}
                       
@@ -456,6 +414,33 @@ export const Books: React.FC = () => {
               </p>
               <Button asChild>
                 <a href="/create">Create Your First Book</a>
+              </Button>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                disabled={page === 1 || loading}
+              >
+                Previous
+              </Button>
+              
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages || loading}
+              >
+                Next
               </Button>
             </div>
           )}
