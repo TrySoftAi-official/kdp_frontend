@@ -1,0 +1,204 @@
+import axios, { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from "axios";
+
+// Base URL for backend - can be overridden by environment variables
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// Create axios instance with enhanced configuration
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds timeout
+  withCredentials: false, // Changed to false to avoid CORS issues
+  headers: {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  },
+});
+
+// Request interceptor for authentication and request tracking
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    // Add authentication token
+    const token = localStorage.getItem("access_token") || localStorage.getItem("accessToken");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Add request ID for tracking
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    config.headers["X-Request-ID"] = requestId;
+
+    // Log request in development
+    if ((import.meta as any).env?.DEV) {
+      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+        headers: config.headers,
+        data: config.data,
+        params: config.params,
+      });
+    }
+
+    return config;
+  },
+  (error) => {
+    console.error("Request interceptor error:", error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling and token refresh
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => {
+    // Log response in development
+    if ((import.meta as any).env?.DEV) {
+      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        status: response.status,
+        data: response.data,
+      });
+    }
+    return response;
+  },
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Log error in development
+    if ((import.meta as any).env?.DEV) {
+      console.error(`❌ API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+    }
+
+    // Handle 401 Unauthorized - attempt token refresh
+    if (error.response?.status === 401 && !originalRequest?._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshToken = localStorage.getItem("refresh_token") || localStorage.getItem("refreshToken");
+        if (refreshToken) {
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
+
+          const { access_token } = response.data;
+          localStorage.setItem("access_token", access_token);
+          
+          // Retry original request with new token
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          return apiClient(originalRequest);
+        }
+      } catch (refreshError) {
+        // Refresh failed, redirect to login
+        console.error("Token refresh failed:", refreshError);
+        handleAuthError();
+        return Promise.reject(refreshError);
+      }
+    }
+
+    // Handle other HTTP errors
+    if (error.response) {
+      const { status, data } = error.response;
+      
+      switch (status) {
+        case 401:
+          handleAuthError();
+          break;
+        case 403:
+          // Handle forbidden access
+          if (typeof window !== 'undefined') {
+            // You can dispatch a toast notification here
+            console.warn("Access forbidden");
+          }
+          break;
+        case 404:
+          // Handle not found
+          console.warn("Resource not found");
+          break;
+        case 429:
+          // Handle rate limiting
+          console.warn("Rate limit exceeded");
+          break;
+        case 500:
+          // Handle server errors
+          if (typeof window !== 'undefined') {
+            // You can dispatch a toast notification here
+            console.error("Server error occurred");
+          }
+          break;
+        default:
+          console.error(`HTTP Error ${status}:`, data);
+      }
+    } else if (error.request) {
+      // Network error
+      console.error("Network error:", error.message);
+      if (typeof window !== 'undefined') {
+        // You can dispatch a toast notification here
+        console.error("Network connection failed");
+      }
+    } else {
+      // Other error
+      console.error("Request setup error:", error.message);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Helper function to handle authentication errors
+const handleAuthError = () => {
+  // Clear stored tokens
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+
+  // Redirect to login page
+  if (typeof window !== 'undefined') {
+    // Only redirect if not already on login page
+    if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/passwordless')) {
+      window.location.href = '/login';
+    }
+  }
+};
+
+// Helper function to get error message from API response
+export const getErrorMessage = (error: AxiosError): string => {
+  if (error.response?.data) {
+    const data = error.response.data as any;
+    
+    // Handle different error response formats
+    if (typeof data === 'string') {
+      return data;
+    }
+    
+    if (data.detail) {
+      return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+    }
+    
+    if (data.message) {
+      return data.message;
+    }
+    
+    if (data.error) {
+      return typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+    }
+  }
+  
+  if (error.message) {
+    return error.message;
+  }
+  
+  return 'An unexpected error occurred';
+};
+
+// Helper function to check if error is network related
+export const isNetworkError = (error: AxiosError): boolean => {
+  return !error.response && error.request;
+};
+
+// Helper function to check if error is timeout
+export const isTimeoutError = (error: AxiosError): boolean => {
+  return error.code === 'ECONNABORTED' || error.message.includes('timeout');
+};
+
+export default apiClient;
