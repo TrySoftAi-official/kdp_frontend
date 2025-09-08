@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  Shield
+  Shield,
+  Zap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,6 +41,13 @@ const navItems: NavItem[] = [
     icon: Book,
     description: 'Generate new books',
     badge: 'New'
+  },
+  {
+    label: 'AI Assistant',
+    href: '/intelligent-assistant',
+    icon: Zap,
+    description: 'Intelligent book generation',
+    badge: 'AI'
   },
   {
     label: 'My Books',

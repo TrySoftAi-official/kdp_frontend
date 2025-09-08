@@ -8,32 +8,74 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  isInitialized: boolean;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
-  initializeAuth: () => void;
+  initializeAuth: () => Promise<void>;
+  setTestUser: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      isInitialized: false,
 
-      initializeAuth: () => {
+      initializeAuth: async () => {
+        const state = get();
+        if (state.isInitialized) {
+          console.log('AuthStore: Already initialized, skipping');
+          return;
+        }
+
         console.log('AuthStore: Initializing authentication state');
-        const user = authApi.getCurrentUser();
-        console.log('AuthStore: Retrieved user from storage:', user);
-        if (user) {
-          set({ user, isAuthenticated: true });
-          console.log('AuthStore: User authenticated on initialization');
-        } else {
-          console.log('AuthStore: No user found in storage');
+        set({ isLoading: true, error: null });
+        
+        try {
+          // First try to get user from server
+          const userData = await authApi.getCurrentUser();
+          console.log('AuthStore: Retrieved user from server:', userData);
+          
+          // Check if we got an error response
+          if (userData && typeof userData === 'object' && 'error' in userData) {
+            console.log('AuthStore: Server returned error, using fallback');
+            throw new Error(userData.error);
+          }
+          
+          if (userData) {
+            // Convert UserResponse to User format
+            const user: User = {
+              id: userData.id,
+              email: userData.email,
+              name: userData.username, // Map username to name
+              role: userData.role,
+              avatar: undefined // UserResponse doesn't have avatar
+            };
+            set({ user, isAuthenticated: true, isLoading: false, isInitialized: true });
+            console.log('AuthStore: User authenticated on initialization');
+          } else {
+            console.log('AuthStore: No user found');
+            set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: true });
+          }
+        } catch (error) {
+          console.error('AuthStore: Failed to fetch user:', error);
+          // Fallback to localStorage
+          const localUser = authApi.getCurrentUser();
+          console.log('AuthStore: Retrieved user from storage:', localUser);
+          if (localUser) {
+            set({ user: localUser, isAuthenticated: true, isLoading: false, isInitialized: true });
+            console.log('AuthStore: User authenticated from storage');
+          } else {
+            console.log('AuthStore: No user found in storage');
+            set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: true });
+          }
         }
       },
 
@@ -92,6 +134,21 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      // Temporary function for testing - set a test user
+      setTestUser: () => {
+        const testUser = {
+          id: '1',
+          email: 'user@example.com',
+          name: 'Test User',
+          role: 'guest' as const,
+          avatar: undefined
+        };
+        console.log('AuthStore: Setting test user for development');
+        set({ user: testUser, isAuthenticated: true, error: null });
+        // Also set in localStorage for persistence
+        authApi.setTokensDirectly('test-access-token', 'test-refresh-token', testUser);
       }
     }),
     {
@@ -99,6 +156,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated
+        // Don't persist isInitialized to avoid issues on page reload
       })
     }
   )

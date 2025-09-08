@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/stores/authStore';
-import { UserRole } from '@/types';
+import { UserRole, User } from '@/types';
 import { ROLES } from '@/lib/constants';
 import { useAuthApi } from './useAuthApi';
 
@@ -15,7 +15,8 @@ export const useAuth = () => {
     setLoading,
     setError,
     clearError,
-    initializeAuth
+    initializeAuth,
+    setTestUser
   } = useAuthStore();
 
   // Use the new API hook
@@ -62,6 +63,29 @@ export const useAuth = () => {
     return hasPermission('manage_campaigns');
   };
 
+  const refreshUserData = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      const userData = await authApi.getCurrentUser();
+      if (userData) {
+        // Convert UserResponse to User format
+        const user: User = {
+          id: userData.id,
+          email: userData.email,
+          name: userData.username, // Map username to name
+          role: userData.role,
+          avatar: undefined // UserResponse doesn't have avatar
+        };
+        setUser(user);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+      setError('Failed to refresh user data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendPasswordlessLink = async (email: string): Promise<void> => {
     const success = await authApi.requestPasswordlessLogin({ email });
     if (!success) {
@@ -95,6 +119,8 @@ export const useAuth = () => {
     setError,
     clearError,
     initializeAuth,
+    setTestUser,
+    refreshUserData,
     sendPasswordlessLink,
     verifyPasswordlessToken,
     handleGoogleCallback,
