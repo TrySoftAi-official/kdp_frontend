@@ -220,17 +220,19 @@ export const AmazonKDPLoginModal: React.FC<AmazonKDPLoginModalProps> = ({
       });
 
       if (response.data) {
-        // Create mock session data for consistency with browser login
-        const sessionData = {
-          cookies: 'manual_login_session',
-          localStorage: 'manual_login_data',
-          sessionId: 'manual_session_id',
-          timestamp: new Date().toISOString(),
+        // Store the connection status in localStorage
+        const kdpSession = {
+          isConnected: true,
+          isValid: true,
+          lastConnected: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+          email: kdpEmail.trim(),
           method: 'manual'
         };
+        localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
 
         // Call success callback
-        onSuccess(sessionData);
+        onSuccess();
       }
     } catch (err: any) {
       console.error('Manual login error:', err);
