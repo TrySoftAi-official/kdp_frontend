@@ -4,13 +4,19 @@ import { Mail, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/stores/authStore';
 import { useNavigate, Navigate } from 'react-router-dom';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState<{ text: string; variant: 'success' | 'error' } | null>(null);
-  const { loginWithGoogle, isAuthenticated, isLoading, sendPasswordlessLink } = useAuth();
+  const { 
+    loginWithGoogle, 
+    requestMagicLink, 
+    isAuthenticated, 
+    isLoading, 
+    error 
+  } = useAuthStore();
   const navigate = useNavigate();
 
   if (isAuthenticated) {
@@ -26,7 +32,7 @@ export const Login: React.FC = () => {
     }
 
     try {
-      await sendPasswordlessLink(email);
+      await requestMagicLink(email);
       setMessage({ text: 'Magic link sent — check your email', variant: 'success' });
       // navigate to check-email screen (we keep email in state)
       navigate('/check-email', { state: { email } });
@@ -41,8 +47,7 @@ export const Login: React.FC = () => {
     setMessage(null);
     try {
       await loginWithGoogle();
-      // if successful, auth context is updated and we can navigate
-      navigate('/dashboard');
+      // Google login redirects to OAuth provider, so no navigation needed here
     } catch (err: any) {
       console.error('google login failed', err);
       const text = err?.message || 'Google login failed';

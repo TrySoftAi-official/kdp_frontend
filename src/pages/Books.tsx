@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Filter, Search, Eye, Edit, Trash2, BookOpen, DollarSign, TrendingUp, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, Filter, Search, Eye, Edit, Trash2, BookOpen, DollarSign, TrendingUp, Loader2, RefreshCw, Settings, Monitor, Database, Server, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Book } from '@/types';
 import { useDynamicApi } from '@/hooks/useDynamicApi';
 import { useApi } from '@/hooks/useApi';
 import { ApiErrorHandler } from '@/components/ApiErrorHandler';
 import { toast } from '@/lib/toast';
+import { 
+  AdditionalService, 
+  ConfigurationUpdate,
+  UploadProgressResponse,
+  BookStatusDebugResponse,
+  BookQueueResponse,
+  EnvStatusResponse
+} from '@/api/additionalService';
 
 // Extended Book interface to include more fields
 interface ExtendedBook extends Book {
@@ -25,6 +35,32 @@ export const Books: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [limit] = useState(12);
+
+  // Additional service states
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  
+  // Configuration states
+  const [configuration, setConfiguration] = useState<ConfigurationUpdate>({});
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+
+  // Bulk operations states
+  const [isBulkClearing, setIsBulkClearing] = useState(false);
+  const [isResettingPending, setIsResettingPending] = useState(false);
+  const [isGeneratingKdpData, setIsGeneratingKdpData] = useState(false);
+  const [bulkOperationResult, setBulkOperationResult] = useState<string>('');
+
+  // Upload states
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressResponse | null>(null);
+  const [isRetryingUploads, setIsRetryingUploads] = useState(false);
+
+  // Debug and monitoring states
+  const [debugBookId, setDebugBookId] = useState('');
+  const [bookDebugInfo, setBookDebugInfo] = useState<BookStatusDebugResponse | null>(null);
+  const [bookQueue, setBookQueue] = useState<BookQueueResponse | null>(null);
+  const [envStatus, setEnvStatus] = useState<EnvStatusResponse | null>(null);
+  const [isLoadingDebug, setIsLoadingDebug] = useState(false);
 
   // Initialize dynamic API
   const {
@@ -147,6 +183,230 @@ export const Books: React.FC = () => {
     }
   };
 
+  // Book selection handlers (for future use)
+  // const handleSelectBook = (bookId: string) => {
+  //   setSelectedBooks(prev => 
+  //     prev.includes(bookId) 
+  //       ? prev.filter(id => id !== bookId)
+  //       : [...prev, bookId]
+  //   );
+  // };
+
+  // const handleSelectAllBooks = () => {
+  //   if (selectedBooks.length === filteredBooks.length) {
+  //     setSelectedBooks([]);
+  //   } else {
+  //     setSelectedBooks(filteredBooks.map(book => book.id));
+  //   }
+  // };
+
+  // Configuration Management Functions
+  const handleUpdateConfiguration = async () => {
+    setIsUpdatingConfig(true);
+    try {
+      await AdditionalService.updateConfiguration(configuration);
+      toast.success('Configuration updated successfully!');
+    } catch (error) {
+      console.error('Error updating configuration:', error);
+      toast.error('Failed to update configuration. Please try again.');
+    } finally {
+      setIsUpdatingConfig(false);
+    }
+  };
+
+  // Bulk Operations Functions
+  const handleBulkClearAll = async () => {
+    setIsBulkClearing(true);
+    setBulkOperationResult('');
+    try {
+      await AdditionalService.bulkClearAll({
+        confirm: true,
+        includeBooks: true,
+        includeUsers: false,
+        includeAnalytics: false
+      });
+      setBulkOperationResult('Bulk clear operation completed successfully!');
+      toast.success('Bulk clear operation completed!');
+      refetchBooks();
+    } catch (error) {
+      console.error('Error in bulk clear:', error);
+      setBulkOperationResult('Failed to perform bulk clear operation.');
+      toast.error('Failed to perform bulk clear operation.');
+    } finally {
+      setIsBulkClearing(false);
+    }
+  };
+
+  const handleBulkResetPending = async () => {
+    setIsResettingPending(true);
+    setBulkOperationResult('');
+    try {
+      await AdditionalService.bulkResetPending({
+        resetAll: true
+      });
+      setBulkOperationResult('Pending books reset successfully!');
+      toast.success('Pending books reset successfully!');
+      refetchBooks();
+    } catch (error) {
+      console.error('Error resetting pending books:', error);
+      setBulkOperationResult('Failed to reset pending books.');
+      toast.error('Failed to reset pending books.');
+    } finally {
+      setIsResettingPending(false);
+    }
+  };
+
+  const handleBulkGenerateKdpData = async () => {
+    setIsGeneratingKdpData(true);
+    setBulkOperationResult('');
+    try {
+      await AdditionalService.bulkGenerateKdpData({
+        generateAll: true,
+        includeMetadata: true
+      });
+      setBulkOperationResult('KDP data generated successfully!');
+      toast.success('KDP data generated successfully!');
+      refetchBooks();
+    } catch (error) {
+      console.error('Error generating KDP data:', error);
+      setBulkOperationResult('Failed to generate KDP data.');
+      toast.error('Failed to generate KDP data.');
+    } finally {
+      setIsGeneratingKdpData(false);
+    }
+  };
+
+  // Upload Functions
+  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setSelectedFiles(files);
+  };
+
+  const handleUploadBook = async () => {
+    if (selectedFiles.length === 0) {
+      toast.error('Please select a file to upload.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const file = selectedFiles[0];
+      await AdditionalService.uploadBook({
+        bookId: `book_${Date.now()}`,
+        file: file,
+        format: file.name.split('.').pop() as any,
+        metadata: { uploadedAt: new Date().toISOString() }
+      });
+
+      toast.success('Book uploaded successfully!');
+      setSelectedFiles([]);
+      refetchBooks();
+    } catch (error) {
+      console.error('Error uploading book:', error);
+      toast.error('Failed to upload book. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleBulkUploadBooks = async () => {
+    if (selectedFiles.length === 0) {
+      toast.error('Please select files to upload.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const books = selectedFiles.map((file, index) => ({
+        bookId: `book_${Date.now()}_${index}`,
+        file: file,
+        format: file.name.split('.').pop() || 'pdf',
+        metadata: { uploadedAt: new Date().toISOString() }
+      }));
+
+      await AdditionalService.bulkUploadBooks({ books });
+      toast.success(`Successfully uploaded ${selectedFiles.length} books!`);
+      setSelectedFiles([]);
+      refetchBooks();
+    } catch (error) {
+      console.error('Error bulk uploading books:', error);
+      toast.error('Failed to bulk upload books. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleGetUploadProgress = async () => {
+    try {
+      const response = await AdditionalService.getUploadProgress();
+      setUploadProgress(response.data);
+    } catch (error) {
+      console.error('Error getting upload progress:', error);
+      toast.error('Failed to get upload progress.');
+    }
+  };
+
+  const handleRetryFailedUploads = async () => {
+    setIsRetryingUploads(true);
+    try {
+      await AdditionalService.retryFailedUploads({
+        retryAll: true
+      });
+      toast.success('Failed uploads retried successfully!');
+      refetchBooks();
+    } catch (error) {
+      console.error('Error retrying failed uploads:', error);
+      toast.error('Failed to retry uploads. Please try again.');
+    } finally {
+      setIsRetryingUploads(false);
+    }
+  };
+
+  // Debug and Monitoring Functions
+  const handleDebugBookStatus = async () => {
+    if (!debugBookId.trim()) {
+      toast.error('Please enter a book ID to debug.');
+      return;
+    }
+
+    setIsLoadingDebug(true);
+    try {
+      const response = await AdditionalService.debugBookStatus(debugBookId);
+      setBookDebugInfo(response.data);
+    } catch (error) {
+      console.error('Error debugging book status:', error);
+      toast.error('Failed to get book debug info. Please try again.');
+    } finally {
+      setIsLoadingDebug(false);
+    }
+  };
+
+  const handleGetBookQueue = async () => {
+    setIsLoadingDebug(true);
+    try {
+      const response = await AdditionalService.getBookQueue();
+      setBookQueue(response.data);
+    } catch (error) {
+      console.error('Error getting book queue:', error);
+      toast.error('Failed to get book queue. Please try again.');
+    } finally {
+      setIsLoadingDebug(false);
+    }
+  };
+
+  const handleGetEnvStatus = async () => {
+    setIsLoadingDebug(true);
+    try {
+      const response = await AdditionalService.getEnvStatus();
+      setEnvStatus(response.data);
+    } catch (error) {
+      console.error('Error getting environment status:', error);
+      toast.error('Failed to get environment status. Please try again.');
+    } finally {
+      setIsLoadingDebug(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -170,6 +430,13 @@ export const Books: React.FC = () => {
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
             Refresh
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => setShowAdvancedTools(!showAdvancedTools)}
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Advanced Tools
           </Button>
           <Button asChild>
             <a href="/create">Create New Book</a>
@@ -244,6 +511,447 @@ export const Books: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Advanced Tools Section */}
+      {showAdvancedTools && (
+        <div className="space-y-4">
+          {/* Configuration Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Configuration Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="config-key">Configuration Key</Label>
+                  <Input
+                    id="config-key"
+                    placeholder="Enter configuration key"
+                    onChange={(e) => setConfiguration({ ...configuration, key: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="config-value">Configuration Value</Label>
+                  <Input
+                    id="config-value"
+                    placeholder="Enter configuration value"
+                    onChange={(e) => setConfiguration({ ...configuration, value: e.target.value })}
+                  />
+                </div>
+              </div>
+              <Button 
+                onClick={handleUpdateConfiguration}
+                disabled={isUpdatingConfig}
+                variant="outline"
+                className="w-full"
+              >
+                {isUpdatingConfig ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                    Updating Configuration...
+                  </>
+                ) : (
+                  <>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Update Configuration
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Bulk Operations */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Bulk Operations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Button 
+                  onClick={handleBulkClearAll}
+                  disabled={isBulkClearing}
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  {isBulkClearing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2" />
+                      Clearing...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear All Books
+                    </>
+                  )}
+                </Button>
+
+                <Button 
+                  onClick={handleBulkResetPending}
+                  disabled={isResettingPending}
+                  variant="outline"
+                  className="text-yellow-600 border-yellow-300 hover:bg-yellow-50"
+                >
+                  {isResettingPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Reset Pending
+                    </>
+                  )}
+                </Button>
+
+                <Button 
+                  onClick={handleBulkGenerateKdpData}
+                  disabled={isGeneratingKdpData}
+                  variant="outline"
+                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                >
+                  {isGeneratingKdpData ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      Generate KDP Data
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {bulkOperationResult && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                    <p className="text-sm text-blue-700">{bulkOperationResult}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Upload Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Book Upload
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="file-upload">Select Files</Label>
+                <Input
+                  id="file-upload"
+                  type="file"
+                  multiple
+                  accept=".pdf,.epub,.mobi,.docx"
+                  onChange={handleFileSelection}
+                />
+                {selectedFiles.length > 0 && (
+                  <p className="text-sm text-gray-600">
+                    Selected {selectedFiles.length} file(s): {selectedFiles.map(f => f.name).join(', ')}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <Button 
+                  onClick={handleUploadBook}
+                  disabled={isUploading || selectedFiles.length === 0}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Single Book
+                    </>
+                  )}
+                </Button>
+
+                <Button 
+                  onClick={handleBulkUploadBooks}
+                  disabled={isUploading || selectedFiles.length === 0}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Bulk Upload
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <div className="flex gap-3">
+                <Button 
+                  onClick={handleGetUploadProgress}
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                >
+                  <Monitor className="h-4 w-4 mr-2" />
+                  Check Progress
+                </Button>
+
+                <Button 
+                  onClick={handleRetryFailedUploads}
+                  disabled={isRetryingUploads}
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                >
+                  {isRetryingUploads ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                      Retrying...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry Failed
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {uploadProgress && (
+                <div className="bg-gray-50 border rounded-lg p-3">
+                  <h4 className="font-semibold mb-2">Upload Progress</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Status: {uploadProgress.status}</span>
+                      <span>{uploadProgress.progress}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Completed: {uploadProgress.completedFiles}/{uploadProgress.totalFiles}</span>
+                      <span>Failed: {uploadProgress.failedFiles}</span>
+                    </div>
+                    {uploadProgress.currentFile && (
+                      <p className="text-sm text-gray-600">Current: {uploadProgress.currentFile}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Debug and Monitoring */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Monitor className="h-5 w-5" />
+                Debug & Monitoring
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="debug-book-id">Book ID for Debug</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="debug-book-id"
+                    placeholder="Enter book ID"
+                    value={debugBookId}
+                    onChange={(e) => setDebugBookId(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleDebugBookStatus}
+                    disabled={isLoadingDebug}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {isLoadingDebug ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                    ) : (
+                      'Debug'
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button 
+                  onClick={handleGetBookQueue}
+                  disabled={isLoadingDebug}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  {isLoadingDebug ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Database className="h-4 w-4 mr-2" />
+                      Book Queue
+                    </>
+                  )}
+                </Button>
+
+                <Button 
+                  onClick={handleGetEnvStatus}
+                  disabled={isLoadingDebug}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  {isLoadingDebug ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Server className="h-4 w-4 mr-2" />
+                      System Status
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Debug Results */}
+              {bookDebugInfo && (
+                <div className="bg-gray-50 border rounded-lg p-3">
+                  <h4 className="font-semibold mb-2">Book Debug Info</h4>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Book ID:</strong> {bookDebugInfo.bookId}</p>
+                    <p><strong>Status:</strong> {bookDebugInfo.status}</p>
+                    {bookDebugInfo.details.generationStatus && (
+                      <p><strong>Generation Status:</strong> {bookDebugInfo.details.generationStatus}</p>
+                    )}
+                    {bookDebugInfo.details.uploadStatus && (
+                      <p><strong>Upload Status:</strong> {bookDebugInfo.details.uploadStatus}</p>
+                    )}
+                    {bookDebugInfo.details.publishStatus && (
+                      <p><strong>Publish Status:</strong> {bookDebugInfo.details.publishStatus}</p>
+                    )}
+                    {bookDebugInfo.details.lastActivity && (
+                      <p><strong>Last Activity:</strong> {bookDebugInfo.details.lastActivity}</p>
+                    )}
+                    {bookDebugInfo.details.errors && bookDebugInfo.details.errors.length > 0 && (
+                      <div>
+                        <strong>Errors:</strong>
+                        <ul className="list-disc list-inside ml-2">
+                          {bookDebugInfo.details.errors.map((error, index) => (
+                            <li key={index} className="text-red-600">{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Book Queue Results */}
+              {bookQueue && (
+                <div className="bg-gray-50 border rounded-lg p-3">
+                  <h4 className="font-semibold mb-2">Book Queue Status</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-3">
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-600">Pending</p>
+                      <p className="text-lg font-bold text-yellow-600">{bookQueue.totalPending}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-600">Running</p>
+                      <p className="text-lg font-bold text-blue-600">{bookQueue.totalRunning}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-600">Completed</p>
+                      <p className="text-lg font-bold text-green-600">{bookQueue.totalCompleted}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-600">Failed</p>
+                      <p className="text-lg font-bold text-red-600">{bookQueue.totalFailed}</p>
+                    </div>
+                  </div>
+                  {bookQueue.queue.length > 0 && (
+                    <div className="space-y-2">
+                      <h5 className="font-medium">Recent Queue Items:</h5>
+                      {bookQueue.queue.slice(0, 3).map((item, index) => (
+                        <div key={index} className="flex justify-between items-center text-xs bg-white p-2 rounded">
+                          <span>{item.type} - {item.status}</span>
+                          <span className="text-gray-500">{new Date(item.createdAt).toLocaleTimeString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Environment Status Results */}
+              {envStatus && (
+                <div className="bg-gray-50 border rounded-lg p-3">
+                  <h4 className="font-semibold mb-2">System Status</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span><strong>Environment:</strong> {envStatus.environment}</span>
+                      <span><strong>Version:</strong> {envStatus.version}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span><strong>Database:</strong> 
+                        <span className={`ml-1 px-2 py-1 rounded text-xs ${
+                          envStatus.database.status === 'connected' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {envStatus.database.status}
+                        </span>
+                      </span>
+                      <span><strong>Uptime:</strong> {Math.floor(envStatus.system.uptime / 3600)}h</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span><strong>Memory:</strong> {envStatus.system.memory.percentage}%</span>
+                      <span><strong>CPU:</strong> {envStatus.system.cpu.usage}%</span>
+                    </div>
+                    {Object.keys(envStatus.services).length > 0 && (
+                      <div>
+                        <strong>Services:</strong>
+                        <div className="grid grid-cols-2 gap-1 mt-1">
+                          {Object.entries(envStatus.services).map(([name, service]) => (
+                            <div key={name} className="flex justify-between text-xs">
+                              <span>{name}:</span>
+                              <span className={`px-1 rounded ${
+                                service.status === 'healthy' ? 'bg-green-100 text-green-800' :
+                                service.status === 'unhealthy' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {service.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters */}
       <Card>

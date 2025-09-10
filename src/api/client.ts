@@ -20,7 +20,20 @@ apiClient.interceptors.request.use(
     // Add authentication token
     const token = localStorage.getItem("access_token") || localStorage.getItem("accessToken");
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Validate token format before sending
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('Sending request with valid token:', token.substring(0, 50) + '...');
+      } else {
+        console.warn('Invalid token format detected, clearing tokens. Token parts:', tokenParts.length, 'Token:', token.substring(0, 50) + '...');
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("refreshToken");
+      }
+    } else {
+      console.log('No token found for request to:', config.url);
     }
 
     // Add request ID for tracking
@@ -75,16 +88,22 @@ apiClient.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem("refresh_token") || localStorage.getItem("refreshToken");
         if (refreshToken) {
+          console.log("Attempting token refresh...");
           const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
             refresh_token: refreshToken,
           });
 
           const { access_token } = response.data;
           localStorage.setItem("access_token", access_token);
+          localStorage.setItem("accessToken", access_token); // Keep both for compatibility
+          console.log("Token refresh successful");
           
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
+        } else {
+          console.log("No refresh token available");
+          handleAuthError();
         }
       } catch (refreshError) {
         // Refresh failed, redirect to login
@@ -152,13 +171,9 @@ const handleAuthError = () => {
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
 
-  // Redirect to login page
-  if (typeof window !== 'undefined') {
-    // Only redirect if not already on login page
-    if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/passwordless')) {
-      window.location.href = '/login';
-    }
-  }
+  // Don't automatically redirect - let the app handle the authentication state
+  // The auth store will handle setting isAuthenticated to false
+  console.log('Authentication error - tokens cleared');
 };
 
 // Helper function to get error message from API response

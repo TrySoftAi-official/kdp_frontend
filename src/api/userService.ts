@@ -99,9 +99,9 @@ export class UserService {
   }
 
   // User Stats
-  static async getUserStats(): Promise<AxiosResponse<UserStats>> {
-    return apiClient.get('/user/stats');
-  }
+  // static async getUserStats(): Promise<AxiosResponse<UserStats>> {
+  //   return apiClient.get('/user/stats');
+  // }
 
   // User Preferences
   static async getUserPreferences(): Promise<AxiosResponse<UserPreferences>> {

@@ -110,7 +110,7 @@ export class AuthService {
   }
 
   static async googleCallback(code: string, state?: string): Promise<AxiosResponse<AuthResponse>> {
-    return apiClient.get(`/auth/google/callback?code=${code}${state ? `&state=${state}` : ''}`);
+    return apiClient.post('/auth/google/callback', { code, state });
   }
 
   // Standard Authentication
@@ -193,13 +193,15 @@ export class AuthService {
 
   static storeTokens(tokens: { access_token: string; refresh_token: string }): void {
     localStorage.setItem('access_token', tokens.access_token);
+    localStorage.setItem('accessToken', tokens.access_token); // Keep both for compatibility
     localStorage.setItem('refresh_token', tokens.refresh_token);
+    localStorage.setItem('refreshToken', tokens.refresh_token); // Keep both for compatibility
   }
 
   static clearTokens(): void {
     localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   }

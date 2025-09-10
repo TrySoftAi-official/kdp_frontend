@@ -1,14 +1,14 @@
 // src/pages/PasswordlessCallback.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/stores/authStore';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 export const PasswordlessCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
   const navigate = useNavigate();
-  const { verifyPasswordlessToken } = useAuth();
+  const { completeMagicLink } = useAuthStore();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const hasProcessedRef = useRef(false);
@@ -32,8 +32,8 @@ export const PasswordlessCallback: React.FC = () => {
       }
       
       try {
-        console.log('PasswordlessCallback: Calling verifyPasswordlessToken with token:', token);
-        await verifyPasswordlessToken(token);
+        console.log('PasswordlessCallback: Calling completeMagicLink with token:', token);
+        await completeMagicLink(token);
         console.log('PasswordlessCallback: Login successful');
         setStatus('success');
         

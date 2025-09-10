@@ -1,12 +1,3 @@
-// import React from 'react';
-// import { CreateBook as CreateBookComponent } from '@/components/create-book';
-
-// export const CreateBook: React.FC = () => {
-//   return <CreateBookComponent />;
-// };
-
-
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,8 +79,6 @@ export const CreateBook: React.FC = () => {
   useEffect(() => {
     if (user?.role === 'guest') {
       setShowUpgradeModal(true);
-    } else if (user) {
-      setShowUpgradeModal(false);
     }
   }, [user]);
 

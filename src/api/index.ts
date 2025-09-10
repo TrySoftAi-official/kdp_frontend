@@ -13,6 +13,7 @@ export { default as AuthService } from './authService';
 export { default as PaymentService } from './paymentService';
 export { default as UserService } from './userService';
 export { default as BookService } from './bookService';
+export { default as AdditionalService } from './additionalService';
 
 // Export types from legacy APIs
 export type {
@@ -67,7 +68,7 @@ export type {
   UserSubscription,
   UserUpdate,
   PasswordUpdate,
-  UserStats,
+  // UserStats,
   UserPreferences,
   UserActivity,
   NotificationRequest,
@@ -89,3 +90,19 @@ export type {
   BookSort,
   PaginatedBooksResponse,
 } from './bookService';
+
+export type {
+  ConfigurationUpdate,
+  ConfigurationResponse,
+  BulkOperationResponse,
+  BulkClearAllRequest,
+  BulkResetPendingRequest,
+  BulkGenerateKdpDataRequest,
+  UploadBookRequest,
+  BulkUploadBooksRequest,
+  UploadProgressResponse,
+  RetryFailedUploadsRequest,
+  BookStatusDebugResponse,
+  BookQueueResponse,
+  EnvStatusResponse,
+} from './additionalService';

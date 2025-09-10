@@ -13,14 +13,32 @@ const api = axios.create({
   timeout: 10000, // 10 second timeout to be more generous
 });
 
-// Simple token storage wrapper (localStorage). For better security use httpOnly cookies.
+// Centralized token storage wrapper (localStorage). For better security use httpOnly cookies in production.
 const TokenStorage = {
-  getAccess: () => localStorage.getItem('accessToken'),
-  setAccess: (t?: string | null) => (t ? localStorage.setItem('accessToken', t) : localStorage.removeItem('accessToken')),
-  getRefresh: () => localStorage.getItem('refreshToken'),
-  setRefresh: (t?: string | null) => (t ? localStorage.setItem('refreshToken', t) : localStorage.removeItem('refreshToken')),
+  getAccess: () => localStorage.getItem('access_token') || localStorage.getItem('accessToken'),
+  setAccess: (t?: string | null) => {
+    if (t) {
+      localStorage.setItem('access_token', t);
+      localStorage.setItem('accessToken', t); // Keep both for compatibility
+    } else {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('accessToken');
+    }
+  },
+  getRefresh: () => localStorage.getItem('refresh_token') || localStorage.getItem('refreshToken'),
+  setRefresh: (t?: string | null) => {
+    if (t) {
+      localStorage.setItem('refresh_token', t);
+      localStorage.setItem('refreshToken', t); // Keep both for compatibility
+    } else {
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('refreshToken');
+    }
+  },
   clear: () => {
+    localStorage.removeItem('access_token');
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   },
@@ -35,7 +53,17 @@ const TokenStorage = {
 api.interceptors.request.use((config) => {
   const token = TokenStorage.getAccess();
   if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+    // Validate token format before sending
+    const tokenParts = token.split('.');
+    if (tokenParts.length === 3) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('authApi: Sending request with valid token:', token.substring(0, 50) + '...');
+    } else {
+      console.warn('authApi: Invalid token format detected, clearing tokens. Token parts:', tokenParts.length, 'Token:', token.substring(0, 50) + '...');
+      TokenStorage.clear();
+    }
+  } else {
+    console.log('authApi: No token found for request to:', config.url);
   }
   console.log('Making request to:', config.url, 'with method:', config.method);
   return config;
@@ -77,16 +105,24 @@ api.interceptors.response.use(
       isRefreshing = true;
       try {
         const refreshToken = TokenStorage.getRefresh();
-        if (!refreshToken) throw new Error('No refresh token');
+        if (!refreshToken) {
+          console.log('No refresh token available');
+          throw new Error('No refresh token');
+        }
 
+        console.log('Attempting token refresh...');
         const resp = await axios.post(`${API_BASE}/auth/refresh`, { refresh_token: refreshToken }, { headers: { 'Content-Type': 'application/json' } });
         const { access_token, refresh_token: newRefresh } = resp.data;
         TokenStorage.setAccess(access_token);
-        TokenStorage.setRefresh(newRefresh);
+        if (newRefresh) {
+          TokenStorage.setRefresh(newRefresh);
+        }
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        console.log('Token refresh successful');
         processQueue(null, access_token);
         return api(originalRequest);
       } catch (refreshErr) {
+        console.error('Token refresh failed:', refreshErr);
         processQueue(refreshErr, null);
         TokenStorage.clear();
         return Promise.reject(refreshErr);
@@ -99,6 +135,52 @@ api.interceptors.response.use(
 );
 
 export const authApi = {
+  // Google OAuth methods
+  getGoogleAuthUrl: async () => {
+    try {
+      const response = await api.get('/auth/google/login');
+      return response.data;
+    } catch (error: any) {
+      console.error('Failed to get Google auth URL:', error);
+      throw new Error(
+        error.response?.data?.message || 
+        error.response?.data?.detail || 
+        'Failed to get Google authentication URL'
+      );
+    }
+  },
+
+  googleCallback: async (code: string, state?: string) => {
+    try {
+      const response = await api.post('/auth/google/callback', { code, state });
+      const { access_token, refresh_token, user } = response.data;
+      
+      if (access_token && refresh_token && user) {
+        TokenStorage.setAccess(access_token);
+        TokenStorage.setRefresh(refresh_token);
+        TokenStorage.setUser(user);
+      }
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('Google OAuth callback failed:', error);
+      
+      // Handle 307 redirect case - backend might be redirecting with tokens in URL
+      if (error.response?.status === 307) {
+        console.log('Backend returned 307 redirect, tokens should be in URL parameters');
+        // Don't throw error, let the frontend handle URL parameters
+        return null;
+      }
+      
+      throw new Error(
+        error.response?.data?.message || 
+        error.response?.data?.detail || 
+        'Google authentication failed. Please try again.'
+      );
+    }
+  },
+
+  // Magic Link (Passwordless) methods
   passwordlessLoginRequest: async (email: string) => {
     try {
       const response = await api.post('/auth/passwordless-login/request', { email });
@@ -175,28 +257,31 @@ export const authApi = {
     }
   },
 
-  googleCallback: async (code: string, state?: string) => {
+  // Token refresh method
+  refreshToken: async () => {
     try {
-      const response = await api.post('/auth/google/login', { code, state });
-      const { access_token, refresh_token, user } = response.data;
+      const refreshToken = TokenStorage.getRefresh();
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+      const { access_token, refresh_token: newRefresh } = response.data;
       
-      if (access_token && refresh_token && user) {
-        TokenStorage.setAccess(access_token);
-        TokenStorage.setRefresh(refresh_token);
-        TokenStorage.setUser(user);
+      TokenStorage.setAccess(access_token);
+      if (newRefresh) {
+        TokenStorage.setRefresh(newRefresh);
       }
       
-      return response.data;
+      return { access_token, refresh_token: newRefresh };
     } catch (error: any) {
-      console.error('Google OAuth callback failed:', error);
-      throw new Error(
-        error.response?.data?.message || 
-        error.response?.data?.detail || 
-        'Google authentication failed. Please try again.'
-      );
+      console.error('Token refresh failed:', error);
+      TokenStorage.clear();
+      throw error;
     }
   },
 
+  // Logout method
   logout: async () => {
     try {
       const refreshToken = TokenStorage.getRefresh();
@@ -211,6 +296,7 @@ export const authApi = {
     }
   },
 
+  // Utility methods
   getCurrentUser: () => TokenStorage.getUser(),
   
   setTokensDirectly: (access: string, refresh: string, user: any) => {

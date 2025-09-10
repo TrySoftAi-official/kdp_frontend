@@ -18,14 +18,27 @@ import { Account } from '@/pages/Account';
 import { DynamicApiDemo } from '@/components/DynamicApiDemo';
 import IntelligentAssistantPage from '@/pages/IntelligentAssistant';
 import { useAuth } from '@/hooks/useAuth';
+import { BookPrompt } from './components/create-book/BookPrompt';
 
 function AppContent() {
-  const { initializeAuth } = useAuth();
+  const { initializeAuth, isInitialized, isLoading } = useAuth();
 
   useEffect(() => {
-    // Initialize authentication state on app load
-    initializeAuth();
-  }, [initializeAuth]);
+    // Initialize authentication state on app load if not already initialized
+    if (!isInitialized) {
+      console.log('App: Initializing authentication state');
+      initializeAuth();
+    }
+  }, [initializeAuth, isInitialized]);
+
+  // Show loading screen while auth is initializing
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
@@ -63,7 +76,7 @@ function AppContent() {
         <Route path="account" element={<Account />} />
         <Route path="api-demo" element={<DynamicApiDemo />} />
         <Route path="intelligent-assistant" element={<IntelligentAssistantPage />} />
-        
+        <Route path="BookPrompt" element={<BookPrompt onGenerateBook={() => {}} />} />
         {/* Catch all route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
@@ -74,7 +87,12 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true
+        }}
+      >
         <AppContent />
       </Router>
     </ErrorBoundary>

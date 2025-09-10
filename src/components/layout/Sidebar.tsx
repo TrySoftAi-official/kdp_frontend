@@ -49,6 +49,7 @@ const navItems: NavItem[] = [
     description: 'Intelligent book generation',
     badge: 'AI'
   },
+ 
   {
     label: 'My Books',
     href: '/books',

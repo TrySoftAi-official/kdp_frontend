@@ -9,14 +9,14 @@ export const useAuth = () => {
     isAuthenticated,
     isLoading,
     error,
+    isInitialized,
     loginWithGoogle,
     logout,
     setUser,
     setLoading,
     setError,
     clearError,
-    initializeAuth,
-    setTestUser
+    initializeAuth
   } = useAuthStore();
 
   // Use the new API hook
@@ -112,6 +112,7 @@ export const useAuth = () => {
     isAuthenticated,
     isLoading,
     error,
+    isInitialized,
     loginWithGoogle,
     logout,
     setUser,
@@ -119,7 +120,6 @@ export const useAuth = () => {
     setError,
     clearError,
     initializeAuth,
-    setTestUser,
     refreshUserData,
     sendPasswordlessLink,
     verifyPasswordlessToken,
