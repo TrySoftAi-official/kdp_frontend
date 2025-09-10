@@ -16,7 +16,7 @@ import { Analytics } from '@/pages/Analytics';
 import { Publish } from '@/pages/Publish';
 import { Account } from '@/pages/Account';
 import { DynamicApiDemo } from '@/components/DynamicApiDemo';
-import IntelligentAssistantPage from '@/pages/IntelligentAssistant';
+import { IntelligentAssistant } from '@/pages/IntelligentAssistant';
 import { useAuth } from '@/hooks/useAuth';
 import { BookPrompt } from './components/create-book/BookPrompt';
 
@@ -75,7 +75,7 @@ function AppContent() {
         <Route path="publish" element={<Publish />} />
         <Route path="account" element={<Account />} />
         <Route path="api-demo" element={<DynamicApiDemo />} />
-        <Route path="intelligent-assistant" element={<IntelligentAssistantPage />} />
+        <Route path="intelligent-assistant" element={<IntelligentAssistant />} />
         <Route path="BookPrompt" element={<BookPrompt onGenerateBook={() => {}} />} />
         {/* Catch all route */}
         <Route path="*" element={<Navigate to="/" replace />} />

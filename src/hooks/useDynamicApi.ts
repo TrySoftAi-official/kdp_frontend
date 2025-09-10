@@ -319,15 +319,18 @@ export const useDynamicApi = (options: UseDynamicApiOptions = {}) => {
     }, [payments, handleApiError])
   };
 
-  // Auto-refresh functionality
+  // Auto-refresh functionality - reduced frequency and added conditions
   useEffect(() => {
     if (!enableAutoRefresh || !isAuthenticated) return;
 
     const interval = setInterval(() => {
-      // Refresh critical data
-      user.useUserStats().refetch();
-      books.useBooks().refetch();
-    }, refreshInterval);
+      // Only refresh if user is actively using the app (document is visible)
+      if (document.visibilityState === 'visible') {
+        // Refresh critical data less frequently
+        user.useUserStats().refetch();
+        books.useBooks().refetch();
+      }
+    }, refreshInterval * 2); // Double the interval to reduce API calls
 
     return () => clearInterval(interval);
   }, [enableAutoRefresh, refreshInterval, isAuthenticated, user, books]);

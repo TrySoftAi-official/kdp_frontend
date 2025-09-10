@@ -107,3 +107,16 @@ export function throttle<T extends (...args: any[]) => any>(
     }
   }
 }
+
+export function getErrorMessage(error: any): string {
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  if (error?.response?.data?.detail) {
+    return error.response.data.detail;
+  }
+  if (error?.message) {
+    return error.message;
+  }
+  return 'An unexpected error occurred';
+}

@@ -14,9 +14,10 @@ export const Account: React.FC = () => {
   const { user, refreshUserData } = useAuth();
   const userApi = useUserApi();
 
+  console.log("its My User : ",user);
   // Form states
   const [profileForm, setProfileForm] = useState({
-    firstName: '',
+    firstName:user?.username || '',
     lastName: '',
     email: ''
   });
@@ -216,8 +217,8 @@ export const Account: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
-        <p className="text-muted-foreground">
+      <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
+      <p className="text-muted-foreground">
           Manage your account preferences and subscription
         </p>
       </div>
