@@ -4,6 +4,7 @@ import axios from 'axios';
 // Create a separate axios instance for additional services running on port 8080
 const additionalServiceClient = axios.create({
   baseURL: 'http://127.0.0.1:8080',
+  // baseURL: 'http://192.168.18.164:8000/',
   timeout: 30000,
   withCredentials: false,
   headers: {
@@ -442,6 +443,11 @@ export class AdditionalService {
     return transformedResponse;
   }
 
+  // KDP Login Status Polling
+  static async getKdpLoginStatus(): Promise<AxiosResponse<{ isConnected: boolean; email?: string; error?: string }>> {
+    return additionalServiceClient.get('/kdp-login-status');
+  }
+
   static async getEnvStatus(): Promise<AxiosResponse<EnvStatusResponse>> {
     const response = await additionalServiceClient.get('/env-status');
     
@@ -640,6 +646,7 @@ export const {
   retryFailedUploads,
   debugBookStatus,
   getBookQueue,
+  getKdpLoginStatus,
   getEnvStatus,
   formatUploadProgress,
   getUploadStatusColor,

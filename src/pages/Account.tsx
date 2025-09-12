@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Settings, CreditCard, Bell, Shield, HelpCircle, Loader2 } from 'lucide-react';
+import { User, Settings, CreditCard, Bell, Shield, HelpCircle, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,12 +7,16 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserApi } from '@/hooks/useUserApi';
+import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
 import { ROLES, SUBSCRIPTION_PLANS } from '@/lib/constants';
 import { toast } from '@/lib/toast';
+import { SubscriptionPlansModal } from '@/components/subscription/SubscriptionPlansModal';
+import { BillingHistory } from '@/components/subscription/BillingHistory';
 
 export const Account: React.FC = () => {
   const { user, refreshUserData } = useAuth();
   const userApi = useUserApi();
+  const subscriptionApi = useSubscriptionApi();
 
   console.log("its My User : ",user);
   // Form states
@@ -41,6 +45,8 @@ export const Account: React.FC = () => {
   const [subscription, setSubscription] = useState<any>(null);
   const [userStats, setUserStats] = useState<any>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showPlansModal, setShowPlansModal] = useState(false);
+  const [showBillingHistory, setShowBillingHistory] = useState(false);
 
   // Load user data on component mount
   useEffect(() => {

@@ -13,6 +13,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { AdditionalService } from '@/api/additionalService';
+import AdditionalServiceDefault, { getKdpLoginStatus } from '@/api/additionalService';
 
 interface KDPCredentialsModalProps {
   isOpen: boolean;
@@ -38,6 +39,9 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState(false);
+  const [isConnectingView, setIsConnectingView] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string>('');
 
   const handleInputChange = (field: keyof KDPCredentials, value: string) => {
     setCredentials(prev => ({
@@ -56,7 +60,9 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
     }
 
     setIsSubmitting(true);
-    setError('');
+    setIsConnectingView(true);
+    // Close the first modal immediately while backend continues
+    onClose();
 
     try {
       // Prepare the configuration payload with KDP credentials
@@ -69,8 +75,10 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
       const response = await AdditionalService.updateConfiguration(configPayload);
       
       if (response?.data) {
-        setSuccess(true);
+        const data = response.data as any;
+        const isValid = data?.success === true || data?.valid === true || data?.isValid === true;
         
+        if (isValid) {
         // Store the connection status in localStorage
         const kdpSession = {
           isConnected: true,
@@ -82,24 +90,82 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
         };
         localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
         
-        // Call success callback after a short delay
-        setTimeout(() => {
+          // Notify parent of success
           onSuccess();
-          onClose();
-        }, 1500);
+        } else {
+          const message = data?.message || 'Invalid Amazon KDP credentials. Please try again.';
+          setError(message);
+          try { window.alert(message); } catch {}
+        }
       } else {
-        setError('Failed to save KDP credentials. Please try again.');
+        const message = 'Failed to save KDP credentials. Please try again.';
+        setError(message);
+        try { window.alert(message); } catch {}
       }
     } catch (error: any) {
       console.error('Error saving KDP credentials:', error);
-      setError(
-        error.response?.data?.message || 
-        error.message || 
-        'Failed to save KDP credentials. Please check your connection and try again.'
-      );
+      const message = error.response?.data?.message || error.message || 'Failed to save KDP credentials. Please check your connection and try again.';
+      setError(message);
+      try { window.alert(message); } catch {}
     } finally {
       setIsSubmitting(false);
+      // Start polling login status if we attempted submission
+      try {
+        setPendingEmail(credentials.kdp_email);
+        setIsPolling(true);
+        startPollingLoginStatus(credentials.kdp_email);
+      } catch {}
     }
+  };
+
+  const startPollingLoginStatus = (email: string) => {
+    let attempts = 0;
+    const maxAttempts = 30; // ~90s if intervalMs=3000
+    const intervalMs = 3000;
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const resp = await AdditionalServiceDefault.getKdpLoginStatus();
+        const data = resp?.data as any;
+        if (data?.isConnected) {
+          const kdpSession = {
+            isConnected: true,
+            isValid: true,
+            lastConnected: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            email: data?.email || email,
+            method: 'credentials'
+          };
+          localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
+          setIsPolling(false);
+          try { onSuccess(); } catch {}
+          return; // stop polling
+        }
+
+        if (data && data.isConnected === false && data.error) {
+          setIsPolling(false);
+          try { window.alert(data.error); } catch {}
+          return;
+        }
+      } catch (e: any) {
+        // transient errors; continue until attempts exhausted
+        if (attempts >= maxAttempts) {
+          setIsPolling(false);
+          try { window.alert(e?.message || 'Failed to verify KDP login status.'); } catch {}
+          return;
+        }
+      }
+
+      if (attempts < maxAttempts) {
+        setTimeout(poll, intervalMs);
+      } else {
+        setIsPolling(false);
+        try { window.alert('KDP login verification timed out.'); } catch {}
+      }
+    };
+
+    setTimeout(poll, intervalMs);
   };
 
   const handleRedirectToKDP = () => {
@@ -112,6 +178,7 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
     setIsSubmitting(false);
     setError('');
     setSuccess(false);
+    setIsConnectingView(false);
   };
 
   React.useEffect(() => {
@@ -124,7 +191,7 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md">
+      <Card className=" w-full max-w-md">
         <CardHeader className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -160,9 +227,56 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
                 Your Amazon KDP account has been connected successfully.
               </p>
             </div>
+          ) : isConnectingView ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+                <span className="text-sm text-gray-700">Verifying credentials...</span>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Amazon KDP Email</Label>
+                <Input value={credentials.kdp_email} disabled className="w-full" />
+              </div>
+              <div className="space-y-2">
+                <Label>Amazon KDP Password</Label>
+                <Input value={credentials.kdp_password} type="password" disabled className="w-full" />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                  <span className="text-sm text-red-700">{error}</span>
+                </div>
+              )}
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium mb-1">Security Notice</p>
+                    <p>
+                      Your credentials are encrypted and stored securely. They will only be used to 
+                      authenticate with Amazon KDP for book publishing operations.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
           ) : (
             <>
-              {/* KDP Website Redirect */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -185,7 +299,6 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
                 </div>
               </div>
 
-              {/* Credentials Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="kdp-email">Amazon KDP Email *</Label>
@@ -229,7 +342,6 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Error Display */}
                 {error && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
@@ -237,7 +349,6 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
                   </div>
                 )}
 
-                {/* Security Notice */}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -251,7 +362,6 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-3 pt-2">
                   <Button
                     type="button"
@@ -285,6 +395,19 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+};
+
+// Lightweight global overlay shown by parent components if desired
+export const KDPConnectingOverlay: React.FC<{ visible: boolean }> = ({ visible }) => {
+  if (!visible) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-lg shadow-lg p-4 flex items-center gap-3">
+        <Loader2 className="h-5 w-5 animate-spin text-orange-600" />
+        <span className="text-sm text-gray-800">Connecting to Amazon KDP…</span>
+      </div>
     </div>
   );
 };
