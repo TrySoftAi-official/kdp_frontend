@@ -1069,11 +1069,14 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
         setApiError('Please connect your Amazon KDP account before publishing.');
         return;
       }
+      // Prefer backend string-based bookId when present (from status/debug)
+      const isStringId = typeof book.id === 'string' && /\d{10,}/.test(book.id);
+      let effectiveStringId: string | null = isStringId ? book.id : null;
       // Ensure we have a numeric book ID if backend expects it
       const numericId = parseInt(book.id as unknown as string, 10);
       let effectiveId: number | null = (!numericId || Number.isNaN(numericId)) ? null : numericId;
-      // Auto-resolve a valid server ID if local ID isn't numeric
-      if (!effectiveId) {
+      // Auto-resolve a valid server ID if local ID isn't numeric and no string id
+      if (!effectiveStringId && !effectiveId) {
         try {
           const listResp = await AdditionalService.getBooks(1, 200);
           const items: any[] = Array.isArray(listResp?.data?.books) ? listResp.data.books : (Array.isArray(listResp?.data) ? listResp.data : []);
@@ -1092,12 +1095,14 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
         }
       }
 
-      if (!effectiveId) {
-        setApiError('Could not resolve a valid server book ID for this title. Please ensure the book exists on the server.');
+      if (!effectiveStringId && !effectiveId) {
+        setApiError('Could not resolve a valid server book ID. Ensure the book exists on the server.');
         return;
       }
 
-      const response = await AdditionalService.uploadBook({ book_id: effectiveId });
+      const response = await AdditionalService.uploadBook(
+        effectiveStringId ? { bookId: effectiveStringId } : { book_id: effectiveId as number }
+      );
       if (response?.data?.status === 'completed') {
         alert('Book uploaded to Amazon KDP successfully!');
         // Optionally update book status

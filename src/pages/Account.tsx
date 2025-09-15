@@ -12,6 +12,7 @@ import { ROLES, SUBSCRIPTION_PLANS } from '@/lib/constants';
 import { toast } from '@/lib/toast';
 import { SubscriptionPlansModal } from '@/components/subscription/SubscriptionPlansModal';
 import { BillingHistory } from '@/components/subscription/BillingHistory';
+import { SubscriptionStatusWidget } from '@/components/subscription/SubscriptionStatusWidget';
 
 export const Account: React.FC = () => {
   const { user, refreshUserData } = useAuth();
@@ -450,84 +451,12 @@ export const Account: React.FC = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Subscription
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center">
-                <Badge 
-                  variant={subscription?.status === 'active' ? 'default' : 'secondary'} 
-                  className="mb-2"
-                >
-                  {subscription ? userApi.getSubscriptionLabel(subscription.plan) : 'Free Plan'}
-                </Badge>
-                <p className="text-2xl font-bold">
-                  {subscription ? userApi.formatCurrency(SUBSCRIPTION_PLANS.find(p => p.id === subscription.plan)?.price || 0) : '$0'}/month
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {subscription?.expires_at ? `Next billing date: ${userApi.formatDate(subscription.expires_at)}` : 'No active subscription'}
-                </p>
-              </div>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Books uploaded</span>
-                  <span>{userStats?.total_books || 0}/{userStats?.total_books || '∞'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Published books</span>
-                  <span>{userStats?.published_books || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total revenue</span>
-                  <span>{userApi.formatCurrency(userStats?.total_revenue || 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Account age</span>
-                  <span>{userStats?.account_age_days || 0} days</span>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                {subscription?.status !== 'active' && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full"
-                    onClick={() => handleSubscriptionUpgrade('pro')}
-                    disabled={isUpdating}
-                  >
-                    {isUpdating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Upgrading...
-                      </>
-                    ) : (
-                      'Upgrade Plan'
-                    )}
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" className="w-full">
-                  View Billing History
-                </Button>
-                {subscription?.status === 'active' && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="w-full text-red-600 hover:text-red-700"
-                    onClick={() => userApi.cancelSubscription()}
-                    disabled={isUpdating}
-                  >
-                    Cancel Subscription
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <SubscriptionStatusWidget 
+            showUpgradeButton={true}
+            showUsageDetails={true}
+            compact={false}
+            onUpgrade={() => setShowPlansModal(true)}
+          />
 
           <Card>
             <CardHeader>
@@ -604,6 +533,17 @@ export const Account: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Subscription Plans Modal */}
+      <SubscriptionPlansModal
+        isOpen={showPlansModal}
+        onClose={() => setShowPlansModal(false)}
+        onSuccess={() => {
+          setShowPlansModal(false);
+          loadUserData();
+        }}
+        currentPlanId={subscription?.plan}
+      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Metric } from '@/types';
 import { analyticsApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { SubscriptionStatusWidget } from '@/components/subscription/SubscriptionStatusWidget';
 
 // Simple Metric Card Component
 const SimpleMetricCard: React.FC<{ metric: Metric }> = ({ metric }) => {
@@ -134,41 +135,55 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Recent Events */}
-      <Card className="shadow-md">
-        <CardContent className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Recent Events</h2>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div>
-                <p className="font-medium">Book Published Successfully</p>
-                <p className="text-sm text-gray-600">Digital Marketing Mastery has been published</p>
+      {/* Subscription Status */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          {/* Recent Events */}
+          <Card className="shadow-md">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Recent Events</h2>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <div>
+                    <p className="font-medium">Book Published Successfully</p>
+                    <p className="text-sm text-gray-600">Digital Marketing Mastery has been published</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <div>
+                    <p className="font-medium">High Ad Spend Alert</p>
+                    <p className="text-sm text-gray-600">Romance in Paris campaign exceeded budget</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div>
+                    <p className="font-medium">New Order Received</p>
+                    <p className="text-sm text-gray-600">Order for "Cooking Basics" received</p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-              <div>
-                <p className="font-medium">High Ad Spend Alert</p>
-                <p className="text-sm text-gray-600">Romance in Paris campaign exceeded budget</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div>
-                <p className="font-medium">New Order Received</p>
-                <p className="text-sm text-gray-600">Order for "Cooking Basics" received</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="space-y-6">
+          <SubscriptionStatusWidget 
+            showUpgradeButton={true}
+            showUsageDetails={true}
+            compact={false}
+          />
+        </div>
+      </div>
+
 
       {/* Quick Actions */}
       <Card className="shadow-md">
         <CardContent className="p-6">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
             <a href="/create" className="p-4 bg-blue-100 hover:bg-blue-200 rounded-lg text-blue-800 font-medium transition-colors text-center">
               Create New Book
             </a>
@@ -180,6 +195,9 @@ export const Dashboard: React.FC = () => {
             </a>
             <a href="/analytics" className="p-4 bg-orange-100 hover:bg-orange-200 rounded-lg text-orange-800 font-medium transition-colors text-center">
               View Analytics
+            </a>
+            <a href="/subscription" className="p-4 bg-yellow-100 hover:bg-yellow-200 rounded-lg text-yellow-800 font-medium transition-colors text-center">
+              Manage Subscription
             </a>
           </div>
         </CardContent>

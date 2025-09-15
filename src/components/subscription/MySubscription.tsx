@@ -16,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/lib/toast';
 import { UserSubscriptionWithPlanResponse } from '@/api/subscriptionService';
 
@@ -29,7 +28,6 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
   onUpgrade,
   onCancel
 }) => {
-  const { user } = useAuth();
   const subscriptionApi = useSubscriptionApi();
   
   const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
@@ -199,10 +197,36 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
     );
   }
 
-  const { subscription, plan } = subscriptionData;
-  const isActive = subscription.status === 'active';
-  const isCancelled = subscription.status === 'cancelled';
-  const isPastDue = subscription.status === 'past_due';
+  const { subscription, plan } = subscriptionData || {};
+  const isActive = subscription?.status === 'active';
+  const isCancelled = subscription?.status === 'cancelled';
+  const isPastDue = subscription?.status === 'past_due';
+
+  // If no subscription data, show the no subscription state
+  if (!subscriptionData || !subscription || !plan) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            My Subscription
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Active Subscription</h3>
+            <p className="text-muted-foreground mb-4">
+              You're currently on the free plan. Upgrade to unlock premium features.
+            </p>
+            <Button onClick={onUpgrade}>
+              View Plans
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -222,17 +246,17 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
         {/* Plan Overview */}
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-xl font-semibold">{plan.name}</h3>
-            <p className="text-muted-foreground">{plan.description}</p>
+            <h3 className="text-xl font-semibold">{plan?.name || 'Free Plan'}</h3>
+            <p className="text-muted-foreground">{plan?.description || 'Basic features included'}</p>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold">
-              {formatCurrency(plan.price)}/{subscription.billing_cycle}
+              {formatCurrency(plan?.price || 0)}/{subscription?.billing_cycle || 'month'}
             </div>
-            <Badge className={getStatusColor(subscription.status)}>
+            <Badge className={getStatusColor(subscription?.status || 'free')}>
               <div className="flex items-center gap-1">
-                {getStatusIcon(subscription.status)}
-                {subscriptionApi.getStatusLabel(subscription.status)}
+                {getStatusIcon(subscription?.status || 'free')}
+                {subscriptionApi.getStatusLabel(subscription?.status || 'free')}
               </div>
             </Badge>
           </div>
@@ -243,19 +267,24 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
           <div>
             <label className="text-sm font-medium text-muted-foreground">Current Period</label>
             <p className="text-sm">
-              {formatDate(subscription.current_period_start)} - {formatDate(subscription.current_period_end)}
+              {subscription?.current_period_start && subscription?.current_period_end ? 
+                `${formatDate(subscription.current_period_start)} - ${formatDate(subscription.current_period_end)}` :
+                'No active subscription'
+              }
             </p>
           </div>
           <div>
             <label className="text-sm font-medium text-muted-foreground">Next Billing Date</label>
             <p className="text-sm">
-              {isCancelled ? 'No future billing' : formatDate(subscription.current_period_end)}
+              {isCancelled ? 'No future billing' : 
+                subscription?.current_period_end ? formatDate(subscription.current_period_end) : 'No active subscription'
+              }
             </p>
           </div>
         </div>
 
         {/* Trial Information */}
-        {subscription.trial_end && new Date(subscription.trial_end) > new Date() && (
+        {subscription?.trial_end && new Date(subscription.trial_end) > new Date() && (
           <div className="p-4 bg-blue-50 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <Calendar className="h-4 w-4 text-blue-600" />
@@ -263,13 +292,13 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
             </div>
             <p className="text-sm text-blue-800">
               Your trial ends on {formatDate(subscription.trial_end)}. 
-              You'll be automatically charged {formatCurrency(plan.price)} on that date.
+              You'll be automatically charged {formatCurrency(plan?.price || 0)} on that date.
             </p>
           </div>
         )}
 
         {/* Cancellation Notice */}
-        {isCancelled && subscription.canceled_at && (
+        {isCancelled && subscription?.canceled_at && (
           <div className="p-4 bg-yellow-50 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-yellow-600" />
@@ -277,7 +306,7 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
             </div>
             <p className="text-sm text-yellow-800">
               Your subscription was cancelled on {formatDate(subscription.canceled_at)}. 
-              You'll retain access until {formatDate(subscription.current_period_end)}.
+              You'll retain access until {subscription?.current_period_end ? formatDate(subscription.current_period_end) : 'the end of your billing period'}.
             </p>
           </div>
         )}
@@ -296,7 +325,7 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
         )}
 
         {/* Usage Information */}
-        {plan.limits && (
+        {plan?.limits && (
           <div className="space-y-4">
             <h4 className="font-medium">Usage This Period</h4>
             
@@ -304,13 +333,13 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Books Created</span>
-                <span className={`text-sm font-medium ${getUsageColor(getUsagePercentage(subscription.books_created_this_period, plan.limits.books_per_month))}`}>
-                  {subscription.books_created_this_period} / {plan.limits.books_per_month === -1 ? '∞' : plan.limits.books_per_month}
+                <span className={`text-sm font-medium ${getUsageColor(getUsagePercentage(subscription?.books_created_this_period || 0, plan.limits.books_per_month))}`}>
+                  {subscription?.books_created_this_period || 0} / {plan.limits.books_per_month === -1 ? '∞' : plan.limits.books_per_month}
                 </span>
               </div>
               {plan.limits.books_per_month !== -1 && (
                 <Progress 
-                  value={getUsagePercentage(subscription.books_created_this_period, plan.limits.books_per_month)} 
+                  value={getUsagePercentage(subscription?.books_created_this_period || 0, plan.limits.books_per_month)} 
                   className="h-2"
                 />
               )}
@@ -319,7 +348,7 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
         )}
 
         {/* Plan Features */}
-        {plan.features && plan.features.length > 0 && (
+        {plan?.features && Array.isArray(plan.features) && plan.features.length > 0 && (
           <div>
             <h4 className="font-medium mb-3">Plan Features</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

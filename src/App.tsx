@@ -15,6 +15,8 @@ import { Books } from '@/pages/Books';
 import { Analytics } from '@/pages/Analytics';
 import { Publish } from '@/pages/Publish';
 import { Account } from '@/pages/Account';
+import { MySubscriptionPage } from '@/pages/MySubscription';
+import { PaymentCallback } from '@/pages/PaymentCallback';
 import { DynamicApiDemo } from '@/components/DynamicApiDemo';
 import { IntelligentAssistant } from '@/pages/IntelligentAssistant';
 import { useAuth } from '@/hooks/useAuth';
@@ -74,6 +76,8 @@ function AppContent() {
         />
         <Route path="publish" element={<Publish />} />
         <Route path="account" element={<Account />} />
+        <Route path="subscription" element={<MySubscriptionPage />} />
+        <Route path="payment-callback" element={<PaymentCallback />} />
         <Route path="api-demo" element={<DynamicApiDemo />} />
         <Route path="intelligent-assistant" element={<IntelligentAssistant />} />
         <Route path="BookPrompt" element={<BookPrompt onGenerateBook={() => {}} />} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Loader2, CreditCard, Star, Zap } from 'lucide-react';
+import { X, Check, Loader2, CreditCard, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,6 @@ interface SubscriptionPlansModalProps {
 export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   isOpen,
   onClose,
-  onSuccess,
   currentPlanId
 }) => {
   const { user } = useAuth();
@@ -28,7 +27,6 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
 
@@ -40,10 +38,14 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
   }, [isOpen]);
 
   const loadPlans = async () => {
+    console.log('🔄 Loading subscription plans...');
     setIsLoadingPlans(true);
     try {
       const plansData = await subscriptionApi.getSubscriptionPlans(true);
-      if (plansData) {
+      console.log('📋 Plans data received:', plansData);
+      
+      if (plansData && Array.isArray(plansData)) {
+        console.log('✅ Plans loaded successfully:', plansData.length, 'plans');
         setPlans(plansData);
         // Auto-select the first paid plan if no current plan
         if (!currentPlanId || currentPlanId === 'free') {
@@ -52,9 +54,14 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             setSelectedPlan(firstPaidPlan);
           }
         }
+      } else {
+        console.log('❌ No plans data or not an array:', plansData);
+        setPlans([]);
       }
     } catch (error) {
+      console.error('❌ Failed to load subscription plans:', error);
       toast.error('Failed to load subscription plans');
+      setPlans([]);
     } finally {
       setIsLoadingPlans(false);
     }
@@ -82,8 +89,8 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         amount: selectedPlan.price,
         currency: 'USD',
         customer_email: user.email,
-        customer_name: user.name || user.username,
-        description: `${selectedPlan.name} Subscription - ${billingCycle}`,
+        customer_name: user.name || user.email,
+        description: `${selectedPlan.name} Subscription`,
         success_url: `${window.location.origin}/account?subscription=success`,
         cancel_url: `${window.location.origin}/account?subscription=cancelled`,
         line_items: [{
@@ -96,7 +103,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
         }],
         metadata: {
           plan_id: selectedPlan.plan_id,
-          billing_cycle: billingCycle,
+          billing_cycle: selectedPlan.billing_cycle,
           user_id: user.id
         },
         payment_method_types: ['card'],
@@ -190,30 +197,6 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
           </Button>
         </div>
 
-        {/* Billing Cycle Toggle */}
-        <div className="p-6 border-b">
-          <div className="flex items-center justify-center space-x-4">
-            <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-primary' : 'text-muted-foreground'}`}>
-              Monthly
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
-              className="relative"
-            >
-              <div className={`absolute left-1 top-1 w-6 h-6 bg-primary rounded transition-transform ${billingCycle === 'yearly' ? 'translate-x-6' : ''}`} />
-            </Button>
-            <span className={`text-sm font-medium ${billingCycle === 'yearly' ? 'text-primary' : 'text-muted-foreground'}`}>
-              Yearly
-            </span>
-            {billingCycle === 'yearly' && (
-              <Badge variant="secondary" className="ml-2">
-                Save 20%
-              </Badge>
-            )}
-          </div>
-        </div>
 
         {/* Plans Grid */}
         <div className="p-6">
@@ -224,7 +207,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {plans.map((plan) => (
+              {plans && Array.isArray(plans) && plans.map((plan) => (
                 <Card 
                   key={plan.id} 
                   className={`relative cursor-pointer transition-all duration-200 hover:shadow-lg ${
@@ -257,7 +240,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
                       <span className="text-4xl font-bold">
                         ${getPlanPrice(plan)}
                       </span>
-                      <span className="text-muted-foreground">/{billingCycle === 'monthly' ? 'month' : 'year'}</span>
+                      <span className="text-muted-foreground">/{plan.billing_cycle === 'monthly' ? 'month' : 'year'}</span>
                     </div>
                     {plan.description && (
                       <p className="text-sm text-muted-foreground mt-2">
@@ -268,12 +251,15 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
 
                   <CardContent className="pt-0">
                     <ul className="space-y-3 mb-6">
-                      {getPlanFeatures(plan).map((feature, index) => (
-                        <li key={index} className="flex items-start">
-                          <Check className="h-4 w-4 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm">{feature}</span>
-                        </li>
-                      ))}
+                      {(() => {
+                        const features = getPlanFeatures(plan);
+                        return features && Array.isArray(features) && features.map((feature, index) => (
+                          <li key={index} className="flex items-start">
+                            <Check className="h-4 w-4 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm">{feature}</span>
+                          </li>
+                        ));
+                      })()}
                     </ul>
 
                     {isCurrentPlan(plan) ? (
@@ -305,7 +291,7 @@ export const SubscriptionPlansModal: React.FC<SubscriptionPlansModalProps> = ({
             <div className="text-sm text-muted-foreground">
               {selectedPlan ? (
                 <span>
-                  Selected: <strong>{selectedPlan.name}</strong> - ${getPlanPrice(selectedPlan)}/{billingCycle === 'monthly' ? 'month' : 'year'}
+                  Selected: <strong>{selectedPlan.name}</strong> - ${getPlanPrice(selectedPlan)}/{selectedPlan.billing_cycle === 'monthly' ? 'month' : 'year'}
                 </span>
               ) : (
                 <span>Please select a plan to continue</span>

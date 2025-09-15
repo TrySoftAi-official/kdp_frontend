@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscriptionIntegration } from '@/hooks/useSubscriptionIntegration';
+import { BookCreationGuard } from '@/components/subscription/SubscriptionGuard';
 import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
 import { 
   AdditionalService, 
@@ -77,6 +79,7 @@ interface CSVBookData {
 
 export const CreateBook: React.FC = () => {
   const { user } = useAuth();
+  const subscriptionIntegration = useSubscriptionIntegration();
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<CSVBookData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -892,6 +895,7 @@ Remember: Small changes add up to big results over time. Your future self will t
   }, [showDropdown]);
 
   return (
+    <BookCreationGuard>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1691,5 +1695,6 @@ Remember: Small changes add up to big results over time. Your future self will t
          currentPlan={user?.subscription?.plan || 'free'}
        />
      </div>
+    </BookCreationGuard>
    );
  };

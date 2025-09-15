@@ -147,8 +147,8 @@ export interface UserSubscriptionWithPlanResponse {
 // Subscription Service Class
 export class SubscriptionService {
   // Subscription Plans
-  static async getSubscriptionPlans(activeOnly: boolean = true): Promise<AxiosResponse<SubscriptionPlanListResponse>> {
-    return apiClient.get(`/subscription/plans?active_only=${activeOnly}`);
+  static async getSubscriptionPlans(_activeOnly: boolean = true): Promise<AxiosResponse<SubscriptionPlanListResponse>> {
+    return apiClient.get(`/subscription/plans`);
   }
 
   static async getSubscriptionPlan(planId: number): Promise<AxiosResponse<SubscriptionPlan>> {

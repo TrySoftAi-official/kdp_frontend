@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUIStore } from '@/stores/uiStore';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { SubscriptionStatusWidget } from '@/components/subscription/SubscriptionStatusWidget';
 
 interface NavItem {
   label: string;
@@ -351,6 +352,17 @@ export const Sidebar: React.FC = () => {
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Subscription Status Widget */}
+            {!sidebarCollapsed && (
+              <div className="px-4 pb-4">
+                <SubscriptionStatusWidget 
+                  showUpgradeButton={true}
+                  showUsageDetails={false}
+                  compact={true}
+                />
               </div>
             )}
 

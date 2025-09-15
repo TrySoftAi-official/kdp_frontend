@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, Crown, Star, Zap, BarChart3, MessageCircle } from 'lucide-react';
-import { SUBSCRIPTION_PLANS } from '@/lib/constants';
+import { Check, Crown, Star, Zap, BarChart3, MessageCircle, Loader2 } from 'lucide-react';
+import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { usePaymentApi } from '@/hooks/usePaymentApi';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/lib/toast';
+import { SubscriptionPlan } from '@/api/subscriptionService';
 import { cn } from '@/lib/utils';
 
 interface PlanUpgradeModalProps {
@@ -19,14 +23,143 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
   requiredFeature,
   currentPlan = 'free'
 }) => {
-  if (!isOpen) return null;
+  const { user } = useAuth();
+  const subscriptionApi = useSubscriptionApi();
+  const paymentApi = usePaymentApi();
+  
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
 
-  const handleUpgrade = (planId: string) => {
-    // In a real app, this would redirect to payment processing
-    console.log(`Upgrading to ${planId} plan`);
-    // For demo purposes, we'll just close the modal
-    onClose();
+  // Load subscription plans
+  useEffect(() => {
+    if (isOpen) {
+      loadPlans();
+    }
+  }, [isOpen]);
+
+  const loadPlans = async () => {
+    console.log('🔄 Loading subscription plans...');
+    setIsLoadingPlans(true);
+    try {
+      const plansData = await subscriptionApi.getSubscriptionPlans(true);
+      console.log('📋 Plans data received:', plansData);
+      
+      if (plansData && Array.isArray(plansData)) {
+        console.log('✅ Plans loaded successfully:', plansData.length, 'plans');
+        setPlans(plansData);
+        // Auto-select the first paid plan if no current plan
+        if (!currentPlan || currentPlan === 'free') {
+          const firstPaidPlan = plansData.find(plan => plan.plan_id !== 'free');
+          if (firstPaidPlan) {
+            setSelectedPlan(firstPaidPlan);
+          }
+        }
+      } else {
+        console.log('❌ No plans data or not an array:', plansData);
+        setPlans([]);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load subscription plans:', error);
+      toast.error('Failed to load subscription plans');
+      setPlans([]);
+    } finally {
+      setIsLoadingPlans(false);
+    }
   };
+
+  const handleUpgrade = async (plan: SubscriptionPlan) => {
+    if (!plan || !user) {
+      toast.error('Please select a plan');
+      return;
+    }
+
+    if (plan.plan_id === currentPlan) {
+      toast.error('You are already on this plan');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Create checkout session for the selected plan
+      const checkoutData = {
+        amount: plan.price,
+        currency: 'USD',
+        customer_email: user.email,
+        customer_name: user.name || user.email,
+        description: `${plan.name} Subscription`,
+        success_url: `${window.location.origin}/account?subscription=success`,
+        cancel_url: `${window.location.origin}/account?subscription=cancelled`,
+        line_items: [{
+          product_name: plan.name,
+          product_description: plan.description || `${plan.name} subscription plan`,
+          quantity: 1,
+          unit_amount: paymentApi.convertToCents(plan.price),
+          tax_amount: 0,
+          tax_rate: 0
+        }],
+        metadata: {
+          plan_id: plan.plan_id,
+          billing_cycle: plan.billing_cycle,
+          user_id: user.id
+        },
+        payment_method_types: ['card'],
+        idempotency_key: paymentApi.generateIdempotencyKey()
+      };
+
+      const checkoutSession = await paymentApi.createCheckoutSession(checkoutData);
+      
+      if (checkoutSession && checkoutSession.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = checkoutSession.url;
+      } else {
+        toast.error('Failed to create checkout session');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast.error('Failed to process payment. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const getDefaultFeatures = (planId: string) => {
+    const defaultFeatures = {
+      free: [
+        '1 book per month',
+        'Basic templates',
+        'Community support',
+        'Standard publishing'
+      ],
+      basic: [
+        '5 books per month',
+        'Premium templates',
+        'Email support',
+        'Advanced publishing tools',
+        'Basic analytics'
+      ],
+      pro: [
+        'Unlimited books',
+        'All templates',
+        'Priority support',
+        'Custom branding',
+        'Advanced analytics',
+        'API access'
+      ],
+      enterprise: [
+        'Everything in Pro',
+        'White-label solution',
+        'Dedicated account manager',
+        'Custom integrations',
+        'SLA guarantee'
+      ]
+    };
+    
+    return defaultFeatures[planId as keyof typeof defaultFeatures] || [];
+  };
+
+  if (!isOpen) return null;
 
 
 
@@ -71,74 +204,116 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
               </div>
             </div>
 
+
             {/* Plans Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {SUBSCRIPTION_PLANS.map((plan) => {
-                const isCurrentPlan = plan.id === currentPlan;
-                const isPopular = plan.popular;
-                
-                return (
-                  <Card 
-                    key={plan.id} 
-                    className={cn(
-                      "relative border-2 transition-all duration-200 hover:shadow-lg",
-                      isCurrentPlan 
-                        ? "border-blue-500 bg-blue-50" 
-                        : "border-gray-200 hover:border-blue-300",
-                      isPopular && "border-purple-500 shadow-lg"
-                    )}
-                  >
-                    {isPopular && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <Badge className="bg-purple-600 text-white px-3 py-1">
-                          <Star className="h-3 w-3 mr-1" />
-                          Most Popular
-                        </Badge>
-                      </div>
-                    )}
-                    
-                    <CardHeader className="text-center pb-4">
-                      <CardTitle className="text-xl font-bold text-gray-900">
-                        {plan.name}
-                      </CardTitle>
-                      <div className="flex items-baseline justify-center gap-1">
-                        <span className="text-3xl font-bold text-gray-900">
-                          ${plan.price}
-                        </span>
-                        <span className="text-gray-500">/month</span>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                      <ul className="space-y-3">
-                        {plan.features.map((feature, index) => (
-                          <li key={index} className="flex items-start gap-3">
-                            <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <Check className="h-3 w-3 text-green-600" />
-                            </div>
-                            <span className="text-sm text-gray-700">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-
-                      <Button
-                        onClick={() => handleUpgrade(plan.id)}
-                        disabled={isCurrentPlan}
-                        className={cn(
-                          "w-full",
-                          isCurrentPlan 
-                            ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
-                            : isPopular 
-                              ? "bg-purple-600 hover:bg-purple-700" 
-                              : "bg-blue-600 hover:bg-blue-700"
+              {isLoadingPlans ? (
+                <div className="col-span-full flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">Loading plans...</span>
+                </div>
+              ) : (
+                plans && Array.isArray(plans) && plans.map((plan) => {
+                  const isCurrentPlan = plan.plan_id === currentPlan;
+                  const isPopular = plan.popular || plan.plan_id === 'pro';
+                  const isSelected = selectedPlan?.id === plan.id;
+                  
+                  return (
+                    <Card 
+                      key={plan.id} 
+                      className={cn(
+                        "relative border-2 transition-all duration-200 hover:shadow-lg cursor-pointer",
+                        isCurrentPlan 
+                          ? "border-blue-500 bg-blue-50" 
+                          : isSelected
+                            ? "border-purple-500 bg-purple-50 shadow-lg"
+                            : "border-gray-200 hover:border-blue-300",
+                        isPopular && "border-purple-500 shadow-lg"
+                      )}
+                      onClick={() => !isCurrentPlan && setSelectedPlan(plan)}
+                    >
+                      {isPopular && (
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <Badge className="bg-purple-600 text-white px-3 py-1">
+                            <Star className="h-3 w-3 mr-1" />
+                            Most Popular
+                          </Badge>
+                        </div>
+                      )}
+                      
+                      {isCurrentPlan && (
+                        <div className="absolute -top-3 right-4">
+                          <Badge variant="secondary">
+                            Current Plan
+                          </Badge>
+                        </div>
+                      )}
+                      
+                      <CardHeader className="text-center pb-4">
+                        <CardTitle className="text-xl font-bold text-gray-900">
+                          {plan.name}
+                        </CardTitle>
+                        <div className="flex items-baseline justify-center gap-1">
+                          <span className="text-3xl font-bold text-gray-900">
+                            ${plan.price}
+                          </span>
+                          <span className="text-gray-500">/{plan.billing_cycle === 'monthly' ? 'month' : 'year'}</span>
+                        </div>
+                        {plan.description && (
+                          <p className="text-sm text-gray-600 mt-2">
+                            {plan.description}
+                          </p>
                         )}
-                      >
-                        {isCurrentPlan ? 'Current Plan' : 'Upgrade Now'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </CardHeader>
+
+                      <CardContent className="space-y-4">
+                        <ul className="space-y-3">
+                          {(() => {
+                            const features = plan.features && plan.features.length > 0 ? plan.features : getDefaultFeatures(plan.plan_id);
+                            return features && Array.isArray(features) && features.map((feature, index) => (
+                              <li key={index} className="flex items-start gap-3">
+                                <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <Check className="h-3 w-3 text-green-600" />
+                                </div>
+                                <span className="text-sm text-gray-700">{feature}</span>
+                              </li>
+                            ));
+                          })()}
+                        </ul>
+
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isCurrentPlan) {
+                              handleUpgrade(plan);
+                            }
+                          }}
+                          disabled={isCurrentPlan || isProcessing}
+                          className={cn(
+                            "w-full",
+                            isCurrentPlan 
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
+                              : isPopular 
+                                ? "bg-purple-600 hover:bg-purple-700" 
+                                : "bg-blue-600 hover:bg-blue-700"
+                          )}
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : isCurrentPlan ? (
+                            'Current Plan'
+                          ) : (
+                            'Upgrade Now'
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
             </div>
 
             {/* Additional Benefits */}
@@ -177,15 +352,42 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
               </div>
             </div>
 
-            {/* Close Button */}
-            <div className="flex justify-center mt-8">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                className="px-8"
-              >
-                Maybe Later
-              </Button>
+            {/* Footer */}
+            <div className="flex items-center justify-between mt-8 p-4 bg-gray-50 rounded-lg">
+              <div className="text-sm text-muted-foreground">
+                {selectedPlan ? (
+                  <span>
+                    Selected: <strong>{selectedPlan.name}</strong> - ${selectedPlan.price}/{selectedPlan.billing_cycle === 'monthly' ? 'month' : 'year'}
+                  </span>
+                ) : (
+                  <span>Please select a plan to continue</span>
+                )}
+              </div>
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={onClose}
+                  className="px-6"
+                >
+                  Maybe Later
+                </Button>
+                {selectedPlan && selectedPlan.plan_id !== currentPlan && (
+                  <Button
+                    onClick={() => handleUpgrade(selectedPlan)}
+                    disabled={isProcessing}
+                    className="px-6"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Upgrade Now'
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

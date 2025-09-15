@@ -34,11 +34,15 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
     setIsLoading(true);
     try {
       const history = await subscriptionApi.getBillingHistory(limit);
-      if (history) {
+      if (history && Array.isArray(history)) {
         setBillingHistory(history);
+      } else {
+        setBillingHistory([]);
       }
     } catch (error) {
+      console.error('Failed to load billing history:', error);
       toast.error('Failed to load billing history');
+      setBillingHistory([]);
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +152,7 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
           </CardHeader>
         )}
         <CardContent>
-          {billingHistory.length === 0 ? (
+          {!billingHistory || !Array.isArray(billingHistory) || billingHistory.length === 0 ? (
             <div className="text-center py-8">
               <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium mb-2">No billing history</h3>
@@ -171,7 +175,7 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {billingHistory.map((transaction) => (
+                    {billingHistory && Array.isArray(billingHistory) && billingHistory.map((transaction) => (
                       <TableRow key={transaction.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -228,7 +232,7 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
 
               {/* Mobile Card View */}
               <div className="md:hidden space-y-3">
-                {billingHistory.map((transaction) => (
+                {billingHistory && Array.isArray(billingHistory) && billingHistory.map((transaction) => (
                   <Card key={transaction.id} className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div>

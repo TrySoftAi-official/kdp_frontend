@@ -41,13 +41,11 @@ apiClient.interceptors.request.use(
     config.headers["X-Request-ID"] = requestId;
 
     // Log request in development
-    if ((import.meta as any).env?.DEV) {
-      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-        headers: config.headers,
-        data: config.data,
-        params: config.params,
-      });
-    }
+    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+      headers: config.headers,
+      data: config.data,
+      params: config.params,
+    });
 
     return config;
   },
@@ -61,25 +59,21 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
     // Log response in development
-    if ((import.meta as any).env?.DEV) {
-      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
-        status: response.status,
-        data: response.data,
-      });
-    }
+    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+      status: response.status,
+      data: response.data,
+    });
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // Log error in development
-    if ((import.meta as any).env?.DEV) {
-      console.error(`❌ API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-      });
-    }
+    console.error(`❌ API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
 
     // Handle 401 Unauthorized - attempt token refresh
     if (error.response?.status === 401 && !originalRequest?._retry) {

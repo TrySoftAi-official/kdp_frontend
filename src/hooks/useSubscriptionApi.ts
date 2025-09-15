@@ -4,7 +4,6 @@ import SubscriptionService, {
   SubscriptionPlan,
   UserSubscription,
   SubscriptionStatus,
-  SubscriptionLimits,
   SubscriptionUpgradeRequest,
   SubscriptionCancelRequest,
   SubscriptionUsageCheckRequest,
@@ -73,7 +72,6 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
   // Subscription Plans
   const getSubscriptionPlans = useCallback(async (activeOnly: boolean = true): Promise<SubscriptionPlan[] | null> => {
     // Check cache first
-    const cacheKey = `plans_${activeOnly}`;
     const cached = cache.plans;
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       return cached.data;
@@ -84,7 +82,7 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
     
     try {
       const response = await SubscriptionService.getSubscriptionPlans(activeOnly);
-      const plans = response.data.plans;
+      const plans = response.data.plans || response.data; // Handle both formats
       
       // Update cache
       setCache(prev => ({
