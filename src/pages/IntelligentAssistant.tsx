@@ -23,7 +23,8 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Upload
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,7 +35,8 @@ import {
   AdditionalService,
   BookGenerationRequest,
   BookQueueResponse,
-  EnvStatusResponse
+  EnvStatusResponse,
+  Book as ApiBook
 } from '@/api/additionalService';
 
 interface GenerationStep {
@@ -58,6 +60,9 @@ interface GeneratedBook {
   progress?: number;
   error?: string;
   estimatedTime?: number;
+  // KDP data workflow
+  kdpPhase?: 'pending' | 'generating' | 'ready';
+  kdpProgress?: number;
 }
 
 interface BookPrompt {
@@ -105,6 +110,11 @@ export const IntelligentAssistant: React.FC = () => {
   // KDP Connection states
   const [amazonKDPSession, setAmazonKDPSession] = useState<AmazonKDPSession>({ isConnected: false });
   const [showKDPCredentialsModal, setShowKDPCredentialsModal] = useState(false);
+  
+  // API books state - used in Hot Selling Genres section
+  const [apiBooks, setApiBooks] = useState<ApiBook[]>([]);
+  const [isLoadingApiBooks, setIsLoadingApiBooks] = useState(false);
+  const [apiBooksError, setApiBooksError] = useState<string>('');
 
   // Check if user needs to upgrade
   useEffect(() => {
@@ -316,7 +326,8 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
         targetAudience: currentPrompt?.targetAudience || 'General Audience',
         wordCount: currentPrompt?.wordCount || 5000,
         createdAt: new Date().toISOString(),
-        status: 'completed'
+        status: 'completed',
+        kdpPhase: 'pending'
       };
       
       setGeneratedBooks(prev => [...prev, completedBook]);
@@ -549,7 +560,8 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
           targetAudience: prompt.targetAudience || 'General Audience',
           wordCount: prompt.wordCount || 5000,
           createdAt: new Date().toISOString(),
-          status: 'completed'
+          status: 'completed',
+          kdpPhase: 'pending'
         };
         setGeneratedBooks(prev => [...prev, completedBook]);
         setIsGenerating(false);
@@ -793,7 +805,35 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
     try {
       const response = await AdditionalService.getBookQueue();
       if (response?.data) {
-        setBookQueue(response.data);
+        setBookQueue(response.data as any);
+        // Attempt to sync local generated books with backend queue status
+        const queueItems: any[] = Array.isArray((response as any).data) ? (response as any).data : (Array.isArray((response as any).data?.queue) ? (response as any).data.queue : []);
+        if (Array.isArray(queueItems) && queueItems.length > 0) {
+          setGeneratedBooks(prev => prev.map(localBook => {
+            const match = queueItems.find((q: any) => String(q.title || '').trim().toLowerCase() === localBook.title.trim().toLowerCase());
+            if (!match) return localBook;
+            // Determine KDP data readiness
+            const hasCover = Boolean(match.cover_path);
+            const hasPdf = Boolean(match.pdf_path);
+            const isReview = String(match.status || '').toLowerCase() === 'review';
+            const kdpReady = (hasCover && hasPdf) || isReview;
+            const newPhase = kdpReady ? 'ready' : 'generating';
+            const progress = kdpReady ? 100 : (typeof match.progress === 'number' ? Math.max(5, Math.min(99, match.progress)) : 50);
+            const updated: any = { ...localBook };
+            if (newPhase !== localBook.kdpPhase || progress !== localBook.kdpProgress) {
+              updated.kdpPhase = newPhase as any;
+              updated.kdpProgress = progress;
+            }
+            // If backend marks completed/generated, reflect in status
+            if (String(match.status || '').toLowerCase() === 'completed') {
+              updated.status = 'completed';
+            }
+            if (isReview) {
+              updated.status = 'completed';
+            }
+            return updated;
+          }));
+        }
       }
     } catch (error) {
       console.error('Error fetching book queue:', error);
@@ -833,10 +873,33 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
     }
   };
 
+  // Fetch books from API
+  const fetchApiBooks = async () => {
+    setIsLoadingApiBooks(true);
+    setApiBooksError('');
+    try {
+      const response = await AdditionalService.getBooks(1, 20); // Get first 20 books
+      console.log('API Response:', response?.data);
+      
+      // The API returns an array directly, not wrapped in a books property
+      if (response?.data) {
+        // Handle both array response and wrapped response
+        const booksData = Array.isArray(response.data) ? response.data : response.data.books || [];
+        setApiBooks(booksData);
+      }
+    } catch (error: any) {
+      console.error('Error fetching books:', error);
+      setApiBooksError(error.response?.data?.message || error.message || 'Failed to fetch books');
+    } finally {
+      setIsLoadingApiBooks(false);
+    }
+  };
+
   // Load system status on component mount (reduced frequency)
   useEffect(() => {
     fetchBookQueue();
     fetchEnvStatus();
+    fetchApiBooks(); // Load API books on mount
     
     // Only refresh system status every 30 seconds instead of constantly
     const systemStatusInterval = setInterval(() => {
@@ -973,6 +1036,95 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showDropdown]);
+
+  // KDP data workflow handlers
+  const handleGenerateKdpDataForBook = async (book: GeneratedBook) => {
+    try {
+      // mark generating on this card
+      setGeneratedBooks(prev => prev.map(b => b.id === book.id ? { ...b, kdpPhase: 'generating', kdpProgress: 0 } : b));
+      // Call backend to generate KDP data (single book path still uses bulk endpoint per spec)
+      const response = await AdditionalService.bulkGenerateKdpData({
+        generateAll: false,
+        includeMetadata: true
+      });
+      // On completion, mark ready
+      if (response?.data) {
+        setGeneratedBooks(prev => prev.map(b => b.id === book.id ? { ...b, kdpPhase: 'ready', kdpProgress: 100 } : b));
+        alert('KDP data generated successfully. You can now publish to Amazon KDP.');
+      } else {
+        setGeneratedBooks(prev => prev.map(b => b.id === book.id ? { ...b, kdpPhase: 'pending', kdpProgress: 0 } : b));
+        setApiError('Failed to generate KDP data');
+      }
+    } catch (error: any) {
+      setGeneratedBooks(prev => prev.map(b => b.id === book.id ? { ...b, kdpPhase: 'pending', kdpProgress: 0 } : b));
+      setApiError(error?.response?.data?.message || error?.message || 'Failed to generate KDP data');
+    }
+  };
+
+  const handleUploadSingleToKdp = async (book: GeneratedBook) => {
+    try {
+      // Require active KDP connection
+      if (!amazonKDPSession.isConnected) {
+        setShowKDPCredentialsModal(true);
+        setApiError('Please connect your Amazon KDP account before publishing.');
+        return;
+      }
+      // Ensure we have a numeric book ID if backend expects it
+      const numericId = parseInt(book.id as unknown as string, 10);
+      let effectiveId: number | null = (!numericId || Number.isNaN(numericId)) ? null : numericId;
+      // Auto-resolve a valid server ID if local ID isn't numeric
+      if (!effectiveId) {
+        try {
+          const listResp = await AdditionalService.getBooks(1, 200);
+          const items: any[] = Array.isArray(listResp?.data?.books) ? listResp.data.books : (Array.isArray(listResp?.data) ? listResp.data : []);
+          // Try exact title match first, then loose contains
+          const exact = items.find((it: any) => String(it.title || it.Title || '').trim().toLowerCase() === book.title.trim().toLowerCase());
+          const candidate = exact || items.find((it: any) => String(it.title || it.Title || '').toLowerCase().includes(book.title.trim().toLowerCase()));
+          if (candidate) {
+            const possibleIds = [candidate.id, candidate.ID, candidate.book_id, candidate.bookId, candidate.pk].map((v: any) => (typeof v === 'string' ? parseInt(v, 10) : v));
+            const resolved = possibleIds.find((n: any) => typeof n === 'number' && !Number.isNaN(n) && n > 0) || null;
+            if (resolved) {
+              effectiveId = resolved;
+            }
+          }
+        } catch (e) {
+          // ignore listing errors, we'll surface a clear message below
+        }
+      }
+
+      if (!effectiveId) {
+        setApiError('Could not resolve a valid server book ID for this title. Please ensure the book exists on the server.');
+        return;
+      }
+
+      const response = await AdditionalService.uploadBook({ book_id: effectiveId });
+      if (response?.data?.status === 'completed') {
+        alert('Book uploaded to Amazon KDP successfully!');
+        // Optionally update book status
+        setGeneratedBooks(prev => prev.map(b => b.id === book.id ? { ...b, status: 'published' } : b));
+      } else {
+        setApiError(response?.data?.message || 'Upload failed');
+      }
+    } catch (error: any) {
+      const serverData = error?.response?.data;
+      const serverDetail = (serverData && (serverData.detail || serverData.message)) ? (serverData.detail || serverData.message) : undefined;
+      const detailText = serverDetail ? (typeof serverDetail === 'string' ? serverDetail : JSON.stringify(serverDetail)) : '';
+      setApiError(detailText || (error?.message || 'Failed to upload book'));
+    }
+  };
+
+  const handleUploadBulkToKdp = async () => {
+    try {
+      const response = await AdditionalService.bulkUploadBooks({ delay_seconds: 60 });
+      if (response?.data?.status === 'completed') {
+        alert('Bulk upload to Amazon KDP started successfully!');
+      } else {
+        setApiError(response?.data?.message || 'Bulk upload failed to start');
+      }
+    } catch (error: any) {
+      setApiError(error?.response?.data?.message || error?.message || 'Failed to start bulk upload');
+    }
+  };
 
   return (
     <CreateBookProvider>
@@ -1164,22 +1316,82 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{bookQueue.totalPending}</div>
+                <div className="text-2xl font-bold text-blue-600">{(bookQueue as any).totalPending ?? 0}</div>
                 <div className="text-sm text-muted-foreground">Pending</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">{bookQueue.totalRunning}</div>
+                <div className="text-2xl font-bold text-yellow-600">{(bookQueue as any).totalRunning ?? 0}</div>
                 <div className="text-sm text-muted-foreground">Running</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{bookQueue.totalCompleted}</div>
+                <div className="text-2xl font-bold text-green-600">{(bookQueue as any).totalCompleted ?? 0}</div>
                 <div className="text-sm text-muted-foreground">Completed</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{bookQueue.totalFailed}</div>
+                <div className="text-2xl font-bold text-red-600">{(bookQueue as any).totalFailed ?? 0}</div>
                 <div className="text-sm text-muted-foreground">Failed</div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Processing Queue - Detailed Items */}
+      {bookQueue && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Processing Queue
+            </CardTitle>
+            <CardDescription>Live view of all tasks and their states</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const items: any[] = Array.isArray((bookQueue as any))
+                ? (bookQueue as any)
+                : (Array.isArray((bookQueue as any).queue) ? (bookQueue as any).queue : []);
+              if (!items || items.length === 0) {
+                return (
+                  <div className="text-sm text-muted-foreground">No items in queue.</div>
+                );
+              }
+              return (
+                <div className="space-y-3">
+                  {items.map((q: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-3 flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{AdditionalService.getQueueTypeIcon((q.type || 'processing') as any)}</span>
+                          <div>
+                            <div className="font-medium text-sm line-clamp-1">{q.title || q.book_title || 'Untitled'}</div>
+                            <div className="text-xs text-muted-foreground line-clamp-1">{q.type || 'processing'}</div>
+                          </div>
+                        </div>
+                        <div>
+                          <Badge className={AdditionalService.getQueueStatusColor((q.status || 'pending') as any)}>
+                            {q.status || 'pending'}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <Progress value={typeof q.progress === 'number' ? Math.max(0, Math.min(100, q.progress)) : 0} className="h-2" />
+                        </div>
+                        <div className="text-xs text-muted-foreground w-10 text-right">
+                          {typeof q.progress === 'number' ? `${Math.max(0, Math.min(100, q.progress))}%` : '—'}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
+                        <div>Cover: {q.cover_path ? 'Ready' : '—'}</div>
+                        <div>PDF: {q.pdf_path ? 'Ready' : '—'}</div>
+                        <div>Status: {q.status || 'pending'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
@@ -1188,19 +1400,36 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
       {/* Suggested Book Generation Slider */}
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Hot Selling Genres & Amazon KDP Suggestions
-          </CardTitle>
-          <CardDescription>
-            Generate popular book types that are trending on Amazon KDP
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Hot Selling Genres & Amazon KDP Suggestions
+              </CardTitle>
+              <CardDescription>
+                Generate popular book types that are trending on Amazon KDP
+              </CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={fetchApiBooks}
+              disabled={isLoadingApiBooks}
+            >
+              {isLoadingApiBooks ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
-                <CardContent>
-                     <div className="relative overflow-hidden group">
+        <CardContent>
+          <div className="relative overflow-hidden group">
             {/* Live Moving Slider Container */}
-                         <div 
-               className={`flex gap-3 cursor-grab active:cursor-grabbing ${!animationPaused ? 'animate-scroll' : ''}`}
+            <div 
+              className={`flex gap-3 cursor-grab active:cursor-grabbing ${!animationPaused ? 'animate-scroll' : ''}`}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -1211,20 +1440,53 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
               style={{ transform: `translateX(${dragOffset}px)` }}
             >
               {(() => {
-                const suggestions = [
-                  { title: "Weight Loss Guide", niche: "Health & Fitness", targetAudience: "Beginners", wordCount: 8000, prompt: "Create a comprehensive weight loss guide for beginners", description: "A complete guide to healthy weight loss with proven strategies and meal plans" },
-                  { title: "Business Startup", niche: "Business & Entrepreneurship", targetAudience: "Entrepreneurs", wordCount: 10000, prompt: "Write a complete guide to starting a business from scratch", description: "Step-by-step guide to launching your own successful business venture" },
-                  { title: "Digital Marketing", niche: "Marketing", targetAudience: "Professionals", wordCount: 12000, prompt: "Create a digital marketing strategy guide for businesses", description: "Comprehensive digital marketing strategies for modern businesses" },
-                  { title: "Personal Finance", niche: "Finance", targetAudience: "Young Adults", wordCount: 9000, prompt: "Write a personal finance guide for young adults", description: "Essential money management skills for financial independence" },
-                  { title: "Cooking Basics", niche: "Food & Cooking", targetAudience: "Beginners", wordCount: 7000, prompt: "Create a beginner's guide to cooking healthy meals", description: "Master the fundamentals of cooking with simple, delicious recipes" },
-                  { title: "Productivity Hacks", niche: "Self-Improvement", targetAudience: "Professionals", wordCount: 6000, prompt: "Write a productivity guide with actionable hacks", description: "Transform your work efficiency with proven productivity techniques" },
-                  { title: "Fitness Training", niche: "Health & Fitness", targetAudience: "Intermediate", wordCount: 8500, prompt: "Create a fitness training program for intermediate level", description: "Advanced workout routines to take your fitness to the next level" },
-                  { title: "Social Media", niche: "Marketing", targetAudience: "Business Owners", wordCount: 9500, prompt: "Write a social media marketing guide for businesses", description: "Build your brand presence and engage customers effectively" }
-                ];
+                // Convert API books to suggestion format
+                const apiSuggestions = apiBooks.map((book: any) => ({
+                  title: String(book.Title || book.title || 'Untitled Book'),
+                  niche: String(book.Category || book.niche || 'General'),
+                  targetAudience: String(book.targetAudience || 'General Audience'),
+                  wordCount: Number(book.wordCount || 5000),
+                  prompt: `Create a book about ${String(book.Title || book.title || 'this topic')}`,
+                  description: String(book.Description || book.description || `A comprehensive guide about ${String(book.Title || book.title || 'this topic')}`),
+                  isApiBook: true,
+                  bookId: String(book.ASIN || book.id || Math.random().toString())
+                }));
+
+                // If no API books, show loading or empty state
+                if (isLoadingApiBooks) {
+                  return (
+                    <div className="flex items-center justify-center w-full py-8">
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                        <span>Loading trending books...</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (apiBooks.length === 0 && !isLoadingApiBooks) {
+                  return (
+                    <div className="flex items-center justify-center w-full py-8">
+                      <div className="text-center">
+                        <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500">No trending books available</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={fetchApiBooks}
+                          className="mt-2"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Try Again
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return [
                   // Original cards
-                  ...suggestions.map((suggestion, index) => (
+                  ...apiSuggestions.map((suggestion, index) => (
                                          <div key={index} className="flex-shrink-0 w-44 h-68 border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-300 bg-white hover:border-blue-300 group">
                       {/* Card Header */}
                       <div className="h-16 mb-3">
@@ -1275,7 +1537,7 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
                     </div>
                   )),
                   // Duplicate cards for seamless infinite scroll
-                  ...suggestions.map((suggestion, index) => (
+                  ...apiSuggestions.map((suggestion, index) => (
                                          <div key={`duplicate-${index}`} className="flex-shrink-0 w-44 h-68 border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-300 bg-white hover:border-blue-300 group">
                       {/* Card Header */}
                       <div className="h-16 mb-3">
@@ -1345,6 +1607,25 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
               </div>
             )}
           </div>
+
+          {/* Error Display */}
+          {apiBooksError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-700">
+                <X className="h-4 w-4" />
+                <span className="font-medium">Error loading books:</span>
+                <span>{apiBooksError}</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setApiBooksError('')}
+                  className="ml-auto text-red-600 hover:text-red-800"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1811,26 +2092,77 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
                             <Download className="h-4 w-4 mr-2" />
                             Download
                           </Button>
-                          <div className="flex-1">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="w-full border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 transition-colors duration-200"
-                              onClick={() => handleGenerateFullBook(book)}
-                              disabled={isUploading}
-                            >
-                              {isUploading ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600 mr-2" />
-                                  Generating...
-                                </>
-                              ) : (
-                                <>
+                          <div className="flex-1 space-y-2 sm:space-y-0">
+                            {book.status === 'completed' && (!book.kdpPhase || book.kdpPhase === 'pending') && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-colors duration-200"
+                                onClick={() => handleGenerateKdpDataForBook(book)}
+                                disabled={isUploading}
+                              >
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                Generate KDP Data
+                              </Button>
+                            )}
+                            {book.status === 'completed' && book.kdpPhase === 'generating' && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full border-purple-200 text-purple-700"
+                                disabled
+                              >
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600 mr-2" />
+                                Generating KDP Data...
+                              </Button>
+                            )}
+                            {book.status === 'completed' && book.kdpPhase === 'ready' && (
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="flex-1 border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 transition-colors duration-200"
+                                  onClick={() => handleUploadSingleToKdp(book)}
+                                  disabled={isUploading}
+                                >
                                   <Sparkles className="h-4 w-4 mr-2" />
-                                  Generate Full Book
-                                </>
-                              )}
-                            </Button>
+                                  Publish to Amazon KDP
+                                </Button>
+                                {generatedBooks.length > 1 && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-colors duration-200"
+                                    onClick={handleUploadBulkToKdp}
+                                    disabled={isUploading}
+                                  >
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Bulk Upload
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            {book.status !== 'completed' && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 transition-colors duration-200"
+                                onClick={() => handleGenerateFullBook(book)}
+                                disabled={isUploading}
+                              >
+                                {isUploading ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600 mr-2" />
+                                    Generating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    Generate Full Book
+                                  </>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>

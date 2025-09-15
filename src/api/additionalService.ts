@@ -200,6 +200,43 @@ export interface EnvStatusResponse {
   };
 }
 
+// Book Management Types
+export interface Book {
+  id: string;
+  asin?: string;
+  title: string;
+  author?: string;
+  description?: string;
+  cover_url?: string;
+  status: 'draft' | 'published' | 'pending' | 'failed';
+  created_at: string;
+  updated_at: string;
+  metadata?: Record<string, any>;
+  // Additional properties for suggestions
+  niche?: string;
+  targetAudience?: string;
+  wordCount?: number;
+}
+
+export interface BooksResponse {
+  books: Book[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
+export interface BookByAsinResponse {
+  book: Book;
+  found: boolean;
+}
+
+export interface ViewCoverResponse {
+  cover_url: string;
+  book_id: string;
+  found: boolean;
+}
+
 // Additional Service Class
 export class AdditionalService {
   // Configuration Management
@@ -329,12 +366,16 @@ export class AdditionalService {
 
   // Book Upload
   static async uploadBook(data: UploadBookRequest): Promise<AxiosResponse<BookGenerationResponse>> {
-    // Transform data to match API specification
-    const apiData = {
-      book_id: data.book_id || parseInt(data.bookId || '0')
-    };
+    const resolvedBookId = data.book_id ?? (data.bookId ? parseInt(data.bookId, 10) : undefined);
+    if (!resolvedBookId || Number.isNaN(resolvedBookId) || resolvedBookId <= 0) {
+      throw new Error('A valid positive numeric book_id is required to upload.');
+    }
 
-    const response = await additionalServiceClient.post('/upload-book', apiData);
+    // Backend Swagger indicates JSON body: { "book_id": number }
+    const jsonBody = { book_id: resolvedBookId } as const;
+    const response: AxiosResponse<any> = await additionalServiceClient.post('/upload-book', jsonBody, {
+      headers: { 'Content-Type': 'application/json' },
+    });
     
     // Transform response to our expected format
     const transformedResponse = {
@@ -426,21 +467,8 @@ export class AdditionalService {
   }
 
   static async getBookQueue(): Promise<AxiosResponse<BookQueueResponse>> {
-    const response = await additionalServiceClient.get('/book-queue');
-    
-    // Transform string response to our expected format
-    const transformedResponse = {
-      ...response,
-      data: {
-        queue: [],
-        totalPending: 0,
-        totalRunning: 0,
-        totalCompleted: 0,
-        totalFailed: 0
-      }
-    };
-    
-    return transformedResponse;
+    // Return raw backend queue to enable live progress/status rendering in UI
+    return additionalServiceClient.get('/book-queue');
   }
 
   // KDP Login Status Polling
@@ -479,6 +507,59 @@ export class AdditionalService {
             usage: 25
           }
         }
+      }
+    };
+    
+    return transformedResponse;
+  }
+
+  // Book Management
+  static async getBooks(page: number = 1, limit: number = 10): Promise<AxiosResponse<BooksResponse>> {
+    const response = await additionalServiceClient.get(`/books?page=${page}&limit=${limit}`);
+    
+    // The API returns an array directly, not wrapped in an object
+    const booksArray = Array.isArray(response.data) ? response.data : [];
+    
+    // Transform response to our expected format
+    const transformedResponse = {
+      ...response,
+      data: {
+        books: booksArray,
+        total: booksArray.length,
+        page: page,
+        limit: limit,
+        has_more: booksArray.length >= limit
+      }
+    };
+    
+    return transformedResponse;
+  }
+
+  static async getBookByAsin(asin: string): Promise<AxiosResponse<BookByAsinResponse>> {
+    const response = await additionalServiceClient.get(`/books/${asin}`);
+    
+    // Transform response to our expected format
+    const transformedResponse = {
+      ...response,
+      data: {
+        book: response.data.book || null,
+        found: response.data.found || false
+      }
+    };
+    
+    return transformedResponse;
+  }
+
+  static async viewCover(bookId: string): Promise<AxiosResponse<ViewCoverResponse>> {
+    const response = await additionalServiceClient.get(`/view-cover/${bookId}`);
+    
+    // Transform response to our expected format
+    const transformedResponse = {
+      ...response,
+      data: {
+        cover_url: response.data.cover_url || '',
+        book_id: bookId,
+        found: response.data.found || false
       }
     };
     
@@ -628,6 +709,64 @@ export class AdditionalService {
       errors,
     };
   }
+
+  // Book Management Helper Methods
+  static getBookStatusColor(status: Book['status']): string {
+    const statusColors: Record<Book['status'], string> = {
+      draft: 'text-gray-600 bg-gray-100',
+      published: 'text-green-600 bg-green-100',
+      pending: 'text-yellow-600 bg-yellow-100',
+      failed: 'text-red-600 bg-red-100',
+    };
+    return statusColors[status] || 'text-gray-600 bg-gray-100';
+  }
+
+  static getBookStatusIcon(status: Book['status']): string {
+    const statusIcons: Record<Book['status'], string> = {
+      draft: '📝',
+      published: '✅',
+      pending: '⏳',
+      failed: '❌',
+    };
+    return statusIcons[status] || '❓';
+  }
+
+  static formatBookDate(dateString: string): string {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  static truncateText(text: string, maxLength: number = 100): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  }
+
+  static validateAsin(asin: string): { isValid: boolean; error?: string } {
+    if (!asin || asin.trim().length === 0) {
+      return { isValid: false, error: 'ASIN is required' };
+    }
+    
+    // Basic ASIN validation (Amazon ASINs are typically 10 characters)
+    if (asin.length !== 10) {
+      return { isValid: false, error: 'ASIN must be exactly 10 characters' };
+    }
+    
+    return { isValid: true };
+  }
+
+  static validateBookId(bookId: string): { isValid: boolean; error?: string } {
+    if (!bookId || bookId.trim().length === 0) {
+      return { isValid: false, error: 'Book ID is required' };
+    }
+    
+    return { isValid: true };
+  }
 }
 
 // Export individual functions for convenience
@@ -648,6 +787,9 @@ export const {
   getBookQueue,
   getKdpLoginStatus,
   getEnvStatus,
+  getBooks,
+  getBookByAsin,
+  viewCover,
   formatUploadProgress,
   getUploadStatusColor,
   getQueueStatusColor,
@@ -657,6 +799,12 @@ export const {
   formatMemoryUsage,
   getServiceStatusColor,
   getDatabaseStatusColor,
+  getBookStatusColor,
+  getBookStatusIcon,
+  formatBookDate,
+  truncateText,
+  validateAsin,
+  validateBookId,
   validateConfigurationUpdate,
   validateBulkClearAll,
   validateUploadBook,

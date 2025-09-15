@@ -32,11 +32,18 @@ import {
   TrendingUp,
   Upload,
   FileSpreadsheet,
-  X
+  X,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
+import { 
+  AdditionalService, 
+  Book as ApiBook,
+  BooksResponse
+} from '@/api/additionalService';
 
 interface GenerationStep {
   id: string;
@@ -83,6 +90,12 @@ export const CreateBook: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
   const [selectedBookForDropdown, setSelectedBookForDropdown] = useState<GeneratedBook | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  // API books state
+  const [apiBooks, setApiBooks] = useState<ApiBook[]>([]);
+  const [isLoadingBooks, setIsLoadingBooks] = useState(false);
+  const [booksError, setBooksError] = useState<string>('');
+  const [showApiBooks, setShowApiBooks] = useState(false);
 
   // Check if user needs to upgrade
   useEffect(() => {
@@ -92,6 +105,28 @@ export const CreateBook: React.FC = () => {
       setShowUpgradeModal(false);
     }
   }, [user]);
+
+  // Fetch books from API
+  const fetchBooks = async () => {
+    setIsLoadingBooks(true);
+    setBooksError('');
+    try {
+      const response = await AdditionalService.getBooks(1, 20); // Get first 20 books
+      if (response?.data?.books) {
+        setApiBooks(response.data.books);
+      }
+    } catch (error: any) {
+      console.error('Error fetching books:', error);
+      setBooksError(error.response?.data?.message || error.message || 'Failed to fetch books');
+    } finally {
+      setIsLoadingBooks(false);
+    }
+  };
+
+  // Load books on component mount
+  useEffect(() => {
+    fetchBooks();
+  }, []);
 
   // Sample books for visual demonstration
   const sampleBooks: GeneratedBook[] = [
@@ -873,6 +908,263 @@ Remember: Small changes add up to big results over time. Your future self will t
           </Badge>
         </div>
       </div>
+
+      {/* Hot Selling Genres & Amazon KDP Suggestions */}
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Hot Selling Genres & Amazon KDP Suggestions
+              </CardTitle>
+              <CardDescription>
+                Generate popular book types that are trending on Amazon KDP
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowApiBooks(!showApiBooks)}
+              >
+                {showApiBooks ? 'Hide' : 'Show'} API Books
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={fetchBooks}
+                disabled={isLoadingBooks}
+              >
+                {isLoadingBooks ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="relative overflow-hidden group">
+            {/* Live Moving Slider Container */}
+            <div className="flex gap-3 cursor-grab active:cursor-grabbing animate-scroll">
+              {(() => {
+                // Combine API books with static suggestions
+                const staticSuggestions = [
+                  { title: "Weight Loss Guide", niche: "Health & Fitness", targetAudience: "Beginners", wordCount: 8000, prompt: "Create a comprehensive weight loss guide for beginners", description: "A complete guide to healthy weight loss with proven strategies and meal plans" },
+                  { title: "Business Startup", niche: "Business & Entrepreneurship", targetAudience: "Entrepreneurs", wordCount: 10000, prompt: "Write a complete guide to starting a business from scratch", description: "Step-by-step guide to launching your own successful business venture" },
+                  { title: "Digital Marketing", niche: "Marketing", targetAudience: "Professionals", wordCount: 12000, prompt: "Create a digital marketing strategy guide for businesses", description: "Comprehensive digital marketing strategies for modern businesses" },
+                  { title: "Personal Finance", niche: "Finance", targetAudience: "Young Adults", wordCount: 9000, prompt: "Write a personal finance guide for young adults", description: "Essential money management skills for financial independence" },
+                  { title: "Cooking Basics", niche: "Food & Cooking", targetAudience: "Beginners", wordCount: 7000, prompt: "Create a beginner's guide to cooking healthy meals", description: "Master the fundamentals of cooking with simple, delicious recipes" },
+                  { title: "Productivity Hacks", niche: "Self-Improvement", targetAudience: "Professionals", wordCount: 6000, prompt: "Write a productivity guide with actionable hacks", description: "Transform your work efficiency with proven productivity techniques" },
+                  { title: "Fitness Training", niche: "Health & Fitness", targetAudience: "Intermediate", wordCount: 8500, prompt: "Create a fitness training program for intermediate level", description: "Advanced workout routines to take your fitness to the next level" },
+                  { title: "Social Media", niche: "Marketing", targetAudience: "Business Owners", wordCount: 9500, prompt: "Write a social media marketing guide for businesses", description: "Build your brand presence and engage customers effectively" }
+                ];
+
+                // Convert API books to suggestion format
+                const apiSuggestions = apiBooks.map(book => ({
+                  title: book.title,
+                  niche: book.niche || 'General',
+                  targetAudience: book.targetAudience || 'General Audience',
+                  wordCount: book.wordCount || 5000,
+                  prompt: `Create a book about ${book.title}`,
+                  description: book.description || `A comprehensive guide about ${book.title}`,
+                  isApiBook: true,
+                  bookId: book.id
+                }));
+
+                // Combine suggestions (API books first if showing, then static)
+                const allSuggestions = showApiBooks ? [...apiSuggestions, ...staticSuggestions] : staticSuggestions;
+
+                return [
+                  // Original cards
+                  ...allSuggestions.map((suggestion, index) => (
+                    <div key={index} className="flex-shrink-0 w-44 h-68 border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-300 bg-white hover:border-blue-300 group">
+                      {/* Card Header */}
+                      <div className="h-16 mb-3">
+                        <h4 className="font-semibold text-sm line-clamp-2 text-gray-900 group-hover:text-blue-600 transition-colors">{suggestion.title}</h4>
+                        {suggestion.isApiBook && (
+                          <Badge variant="secondary" className="text-xs mt-1 bg-green-100 text-green-700">
+                            From API
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Badges Section - Fixed Height */}
+                      <div className="h-20 mb-4 space-y-2">
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-gray-50">{suggestion.niche}</Badge>
+                        <Badge variant="secondary" className="text-xs w-full justify-center">{suggestion.targetAudience}</Badge>
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-blue-50 text-blue-700 border-blue-200">{suggestion.wordCount.toLocaleString()} words</Badge>
+                      </div>
+
+                      {/* Description - Fixed Height */}
+                      <div className="h-16 mb-4">
+                        <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">{suggestion.description}</p>
+                      </div>
+
+                      {/* Action Buttons - Fixed Height */}
+                      <div className="h-20 space-y-2">
+                        <Button 
+                          size="sm" 
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => {
+                            // Handle book generation based on type
+                            if (suggestion.isApiBook) {
+                              // For API books, you might want to handle differently
+                              console.log('Generating from API book:', suggestion.bookId);
+                              // You can implement specific logic for API books here
+                            } else {
+                              // For static suggestions, use existing logic
+                              const newPrompt = {
+                                id: Date.now().toString(),
+                                prompt: suggestion.prompt,
+                                niche: suggestion.niche,
+                                targetAudience: suggestion.targetAudience,
+                                wordCount: suggestion.wordCount,
+                                keywords: '',
+                                description: suggestion.description,
+                                createdAt: new Date().toISOString()
+                              };
+                              // You can add generation logic here if needed
+                              console.log('Generated prompt:', newPrompt);
+                            }
+                          }}
+                        >
+                          <Sparkles className="h-3 w-3 mr-2" />
+                          Generate
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full border-gray-300 hover:border-blue-300 hover:bg-blue-50"
+                          onClick={() => {
+                            // Handle preview
+                            console.log('Preview suggestion:', suggestion);
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-2" />
+                          Preview
+                        </Button>
+                      </div>
+                    </div>
+                  )),
+                  // Duplicate cards for seamless infinite scroll
+                  ...allSuggestions.map((suggestion, index) => (
+                    <div key={`duplicate-${index}`} className="flex-shrink-0 w-44 h-68 border border-gray-200 rounded-lg p-3 hover:shadow-lg transition-all duration-300 bg-white hover:border-blue-300 group">
+                      {/* Card Header */}
+                      <div className="h-16 mb-3">
+                        <h4 className="font-semibold text-sm line-clamp-2 text-gray-900 group-hover:text-blue-600 transition-colors">{suggestion.title}</h4>
+                        {suggestion.isApiBook && (
+                          <Badge variant="secondary" className="text-xs mt-1 bg-green-100 text-green-700">
+                            From API
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Badges Section - Fixed Height */}
+                      <div className="h-20 mb-4 space-y-2">
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-gray-50">{suggestion.niche}</Badge>
+                        <Badge variant="secondary" className="text-xs w-full justify-center">{suggestion.targetAudience}</Badge>
+                        <Badge variant="outline" className="text-xs w-full justify-center bg-blue-50 text-blue-700 border-blue-200">{suggestion.wordCount.toLocaleString()} words</Badge>
+                      </div>
+
+                      {/* Description - Fixed Height */}
+                      <div className="h-16 mb-4">
+                        <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">{suggestion.description}</p>
+                      </div>
+
+                      {/* Action Buttons - Fixed Height */}
+                      <div className="h-20 space-y-2">
+                        <Button 
+                          size="sm" 
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => {
+                            // Handle book generation based on type
+                            if (suggestion.isApiBook) {
+                              // For API books, you might want to handle differently
+                              console.log('Generating from API book:', suggestion.bookId);
+                              // You can implement specific logic for API books here
+                            } else {
+                              // For static suggestions, use existing logic
+                              const newPrompt = {
+                                id: Date.now().toString(),
+                                prompt: suggestion.prompt,
+                                niche: suggestion.niche,
+                                targetAudience: suggestion.targetAudience,
+                                wordCount: suggestion.wordCount,
+                                keywords: '',
+                                description: suggestion.description,
+                                createdAt: new Date().toISOString()
+                              };
+                              // You can add generation logic here if needed
+                              console.log('Generated prompt:', newPrompt);
+                            }
+                          }}
+                        >
+                          <Sparkles className="h-3 w-3 mr-2" />
+                          Generate
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full border-gray-300 hover:border-blue-300 hover:bg-blue-50"
+                          onClick={() => {
+                            // Handle preview
+                            console.log('Preview suggestion:', suggestion);
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-2" />
+                          Preview
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ];
+              })()}
+            </div>
+
+            {/* Gradient Overlays for Smooth Edges */}
+            <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white via-white to-transparent pointer-events-none"></div>
+            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white via-white to-transparent pointer-events-none"></div>
+
+            {/* Pause Indicator */}
+            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs text-gray-600 border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+              Hover to pause
+            </div>
+          </div>
+
+          {/* Error Display */}
+          {booksError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-700">
+                <X className="h-4 w-4" />
+                <span className="font-medium">Error loading books:</span>
+                <span>{booksError}</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setBooksError('')}
+                  className="ml-auto text-red-600 hover:text-red-800"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isLoadingBooks && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading books from API...</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* CSV Upload Section */}
