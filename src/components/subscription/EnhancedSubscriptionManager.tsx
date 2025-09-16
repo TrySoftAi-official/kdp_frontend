@@ -1,119 +1,126 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  CreditCard, 
+  Settings, 
+  AlertTriangle, 
+  CheckCircle, 
+  XCircle, 
+  Loader2,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  Calendar,
+  DollarSign,
+  Users,
+  Shield,
+  Zap
+} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
 import { usePaymentApi } from '@/hooks/usePaymentApi';
-import { SubscriptionPlan, UserSubscription } from '@/api/subscriptionService';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { toast } from '@/lib/toast';
+import { 
+  UserSubscriptionWithPlanResponse, 
+  SubscriptionPlan,
+  SubscriptionStatus,
+  SubscriptionService
+} from '@/api/subscriptionService';
+import { cn } from '@/lib/utils';
 
 interface EnhancedSubscriptionManagerProps {
-  onClose?: () => void;
-}
-
-interface SubscriptionStatus {
-  has_subscription: boolean;
-  plan_type: string;
-  status?: string;
-  current_period_end?: string;
-  restrictions: string[];
-  can_generate_books: boolean;
-  can_upload_books: boolean;
-  can_view_analytics: boolean;
-  can_manage_organization: boolean;
-  can_manage_sub_users: boolean;
-}
-
-interface OrganizationInfo {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  owner_id: number;
-}
-
-interface SubUser {
-  id: number;
-  email: string;
-  username: string;
-  role: string;
-  is_owner: boolean;
-  created_at: string;
+  onSubscriptionChange?: () => void;
+  showUpgradePrompt?: boolean;
+  className?: string;
 }
 
 export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerProps> = ({
-  onClose
+  onSubscriptionChange,
+  showUpgradePrompt = false,
+  className
 }) => {
   const { user } = useAuth();
   const subscriptionApi = useSubscriptionApi();
   const paymentApi = usePaymentApi();
   
+  const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
-  const [currentSubscription, setCurrentSubscription] = useState<UserSubscription | null>(null);
-  const [organizationInfo, setOrganizationInfo] = useState<OrganizationInfo | null>(null);
-  const [subUsers, setSubUsers] = useState<SubUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'plans' | 'organization' | 'billing'>('overview');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDowngradeModal, setShowDowngradeModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellationFeedback, setCancellationFeedback] = useState('');
 
-  useEffect(() => {
-    loadSubscriptionData();
-  }, []);
-
-  const loadSubscriptionData = async () => {
+  // Load subscription data
+  const loadSubscriptionData = useCallback(async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
     try {
-      setIsLoading(true);
+      const [subscriptionResponse, statusResponse] = await Promise.all([
+        subscriptionApi.getMySubscription(),
+        subscriptionApi.getMySubscriptionStatus()
+      ]);
       
-      // Load subscription status
-      const statusResponse = await subscriptionApi.getSubscriptionStatus();
-      setSubscriptionStatus(statusResponse);
-      
-      // Load available plans
-      const plansResponse = await subscriptionApi.getAvailablePlans();
-      setAvailablePlans(plansResponse);
-      
-      // Load current subscription if exists
-      if (statusResponse.has_subscription) {
-        const subscriptionResponse = await subscriptionApi.getMySubscription();
-        setCurrentSubscription(subscriptionResponse);
+      if (subscriptionResponse.data) {
+        setSubscriptionData(subscriptionResponse.data);
       }
       
-      // Load organization info if user has organization
-      if (statusResponse.can_manage_organization) {
-        try {
-          const orgResponse = await subscriptionApi.getMyOrganization();
-          setOrganizationInfo(orgResponse);
-          
-          // Load sub-users if user can manage them
-          if (statusResponse.can_manage_sub_users) {
-            const usersResponse = await subscriptionApi.getOrganizationUsers();
-            setSubUsers(usersResponse);
-          }
-        } catch (error) {
-          console.log('No organization found or user not authorized');
-        }
+      if (statusResponse.data) {
+        setSubscriptionStatus(statusResponse.data);
       }
-      
     } catch (error) {
-      console.error('Error loading subscription data:', error);
+      console.error('Failed to load subscription data:', error);
       toast.error('Failed to load subscription information');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, subscriptionApi]);
 
-  const handleUpgrade = async (plan: SubscriptionPlan) => {
+  useEffect(() => {
+    loadSubscriptionData();
+  }, [loadSubscriptionData]);
+
+  // Handle subscription upgrade
+  const handleUpgrade = useCallback(async (plan: SubscriptionPlan) => {
+    // Comprehensive validation
+    if (!user) {
+      toast.error('You must be logged in to upgrade your subscription');
+      return;
+    }
+
+    if (!plan) {
+      toast.error('Please select a plan');
+      return;
+    }
+
+    if (!plan.price || plan.price <= 0) {
+      toast.error('Invalid plan pricing. Please try again.');
+      return;
+    }
+
+    if (!user.email) {
+      toast.error('Email address is required for payment processing');
+      return;
+    }
+
+    setIsProcessing(true);
+    
     try {
-      setIsLoading(true);
-      
       const checkoutData = {
         amount: plan.price,
         currency: 'USD',
-        customer_email: user?.email,
-        customer_name: user?.name || user?.username,
+        customer_email: user.email,
+        customer_name: user.name || user.email,
         description: `${plan.name} Subscription`,
-        success_url: `${window.location.origin}/account?subscription=success`,
-        cancel_url: `${window.location.origin}/account?subscription=cancelled`,
+        success_url: `${window.location.origin}/checkout/success?plan=${plan.plan_id}&source=subscription_manager`,
+        cancel_url: `${window.location.origin}/checkout/failure?plan=${plan.plan_id}&source=subscription_manager`,
         line_items: [{
           product_name: plan.name,
           product_description: plan.description || `${plan.name} subscription plan`,
@@ -124,456 +131,498 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
         }],
         metadata: {
           plan_id: plan.plan_id,
-          user_id: user?.id
+          billing_cycle: plan.billing_cycle || 'monthly',
+          user_id: user.id,
+          action: 'upgrade',
+          timestamp: new Date().toISOString()
         },
         payment_method_types: ['card'],
         idempotency_key: paymentApi.generateIdempotencyKey()
       };
 
+      console.log('Creating checkout session with data:', checkoutData);
+
       const checkoutSession = await paymentApi.createCheckoutSession(checkoutData);
       
-      if (checkoutSession && checkoutSession.url) {
-        window.location.href = checkoutSession.url;
+      console.log('Checkout session response:', checkoutSession);
+
+      // Handle different response formats
+      let checkoutUrl = null;
+      if (checkoutSession) {
+        checkoutUrl = checkoutSession.url || checkoutSession.data?.url;
+      }
+
+      if (checkoutUrl) {
+        console.log('Redirecting to checkout URL:', checkoutUrl);
+        window.location.href = checkoutUrl;
       } else {
-        toast.error('Failed to create checkout session');
+        console.error('No checkout URL received:', checkoutSession);
+        toast.error('Failed to create checkout session. Please try again.');
       }
     } catch (error) {
-      console.error('Error upgrading subscription:', error);
-      toast.error('Failed to upgrade subscription');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCancelSubscription = async () => {
-    if (!currentSubscription) return;
-    
-    if (window.confirm('Are you sure you want to cancel your subscription? This action cannot be undone.')) {
-      try {
-        setIsLoading(true);
-        await subscriptionApi.cancelSubscription({
-          reason: 'User requested cancellation'
-        });
-        toast.success('Subscription cancelled successfully');
-        loadSubscriptionData();
-      } catch (error) {
-        console.error('Error cancelling subscription:', error);
-        toast.error('Failed to cancel subscription');
-      } finally {
-        setIsLoading(false);
+      console.error('Upgrade error:', error);
+      
+      // Handle different types of errors
+      let errorMessage = 'Failed to process upgrade. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (error.message.includes('unauthorized') || error.message.includes('401')) {
+          errorMessage = 'Authentication required. Please log in again.';
+        } else if (error.message.includes('forbidden') || error.message.includes('403')) {
+          errorMessage = 'Access denied. Please contact support.';
+        } else if (error.message.includes('validation') || error.message.includes('400')) {
+          errorMessage = 'Invalid request. Please check your information and try again.';
+        } else if (error.message.includes('server') || error.message.includes('500')) {
+          errorMessage = 'Server error. Please try again later.';
+        }
       }
+      
+      toast.error(errorMessage);
+    } finally {
+      setIsProcessing(false);
     }
-  };
+  }, [user, paymentApi]);
 
-  const handleInviteSubUser = async (email: string, username: string, role: string) => {
+  // Handle subscription cancellation
+  const handleCancel = useCallback(async (cancelAtPeriodEnd: boolean = true) => {
+    if (!subscriptionData?.subscription) return;
+
+    setIsProcessing(true);
     try {
-      setIsLoading(true);
-      const response = await subscriptionApi.inviteSubUser({
-        email,
-        username,
-        role
+      await subscriptionApi.cancelSubscription({
+        cancel_at_period_end: cancelAtPeriodEnd,
+        cancellation_reason: cancellationReason,
+        feedback: cancellationFeedback
       });
-      toast.success(response.message);
-      setShowInviteModal(false);
-      loadSubscriptionData();
+
+      toast.success(
+        cancelAtPeriodEnd 
+          ? 'Subscription will be cancelled at the end of the current billing period'
+          : 'Subscription has been cancelled immediately'
+      );
+      
+      setShowCancelModal(false);
+      setCancellationReason('');
+      setCancellationFeedback('');
+      await loadSubscriptionData();
+      onSubscriptionChange?.();
     } catch (error) {
-      console.error('Error inviting sub-user:', error);
-      toast.error('Failed to invite sub-user');
+      console.error('Cancellation error:', error);
+      toast.error('Failed to cancel subscription. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
+    }
+  }, [subscriptionData, cancellationReason, cancellationFeedback, subscriptionApi, loadSubscriptionData, onSubscriptionChange]);
+
+  // Handle subscription downgrade
+  const handleDowngrade = useCallback(async (newPlanId: string) => {
+    if (!subscriptionData?.subscription) return;
+
+    setIsProcessing(true);
+    try {
+      await subscriptionApi.downgradeSubscription({
+        new_plan_id: newPlanId,
+        prorate: true,
+        immediate: false
+      });
+
+      toast.success('Subscription has been downgraded successfully');
+      setShowDowngradeModal(false);
+      await loadSubscriptionData();
+      onSubscriptionChange?.();
+    } catch (error) {
+      console.error('Downgrade error:', error);
+      toast.error('Failed to downgrade subscription. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [subscriptionData, subscriptionApi, loadSubscriptionData, onSubscriptionChange]);
+
+  // Handle subscription reactivation
+  const handleReactivate = useCallback(async () => {
+    if (!subscriptionData?.subscription) return;
+
+    setIsProcessing(true);
+    try {
+      await subscriptionApi.reactivateSubscription();
+      toast.success('Subscription has been reactivated successfully');
+      await loadSubscriptionData();
+      onSubscriptionChange?.();
+    } catch (error) {
+      console.error('Reactivation error:', error);
+      toast.error('Failed to reactivate subscription. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [subscriptionData, subscriptionApi, loadSubscriptionData, onSubscriptionChange]);
+
+  // Get subscription status info
+  const getSubscriptionStatusInfo = () => {
+    if (!subscriptionData?.subscription) {
+      return { status: 'No Subscription', color: 'text-gray-600 bg-gray-100', icon: XCircle };
+    }
+
+    const status = subscriptionData.subscription.status;
+    const isActive = SubscriptionService.isSubscriptionActive(subscriptionData.subscription);
+    
+    if (isActive) {
+      return { status: 'Active', color: 'text-green-600 bg-green-100', icon: CheckCircle };
+    } else if (status === 'cancelled') {
+      return { status: 'Cancelled', color: 'text-red-600 bg-red-100', icon: XCircle };
+    } else if (status === 'past_due') {
+      return { status: 'Past Due', color: 'text-orange-600 bg-orange-100', icon: AlertTriangle };
+    } else {
+      return { status: SubscriptionService.getStatusLabel(status), color: SubscriptionService.getStatusColor(status), icon: AlertTriangle };
     }
   };
 
-  const handleRemoveSubUser = async (userId: number) => {
-    if (window.confirm('Are you sure you want to remove this user from your organization?')) {
-      try {
-        setIsLoading(true);
-        await subscriptionApi.removeSubUser(userId);
-        toast.success('User removed successfully');
-        loadSubscriptionData();
-      } catch (error) {
-        console.error('Error removing sub-user:', error);
-        toast.error('Failed to remove user');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'active': return 'text-green-600 bg-green-100';
-      case 'past_due': return 'text-yellow-600 bg-yellow-100';
-      case 'cancelled': return 'text-red-600 bg-red-100';
-      case 'trialing': return 'text-blue-600 bg-blue-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getPlanFeatures = (planType: string) => {
-    const features = {
-      free: ['View books', 'Basic support'],
-      basic: ['View books', 'Basic support'],
-      pro: ['Generate books', 'Upload books', 'View analytics', 'API access', 'Priority support'],
-      premium: ['All Pro features', 'Create organization', 'Manage sub-users', 'Custom branding', 'Unlimited usage']
-    };
-    return features[planType as keyof typeof features] || [];
-  };
+  const statusInfo = getSubscriptionStatusInfo();
+  const StatusIcon = statusInfo.icon;
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
+      <Card className={cn("w-full", className)}>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading subscription...</span>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Subscription Management</h1>
-        <p className="text-gray-600 mt-2">Manage your subscription, organization, and team members</p>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-8">
-          {[
-            { id: 'overview', label: 'Overview' },
-            { id: 'plans', label: 'Plans & Billing' },
-            { id: 'organization', label: 'Organization' },
-            { id: 'billing', label: 'Billing History' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Current Status */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Current Status</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Subscription Plan</h3>
-                <div className="flex items-center space-x-3">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(subscriptionStatus?.status)}`}>
-                    {subscriptionStatus?.plan_type.toUpperCase() || 'FREE'}
-                  </span>
-                  {subscriptionStatus?.status && (
-                    <span className="text-sm text-gray-600">
-                      {subscriptionStatus.status}
-                    </span>
-                  )}
-                </div>
-                {subscriptionStatus?.current_period_end && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    Next billing: {new Date(subscriptionStatus.current_period_end).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Available Features</h3>
-                <div className="space-y-1">
-                  {[
-                    { key: 'can_generate_books', label: 'Generate Books' },
-                    { key: 'can_upload_books', label: 'Upload Books' },
-                    { key: 'can_view_analytics', label: 'View Analytics' },
-                    { key: 'can_manage_organization', label: 'Manage Organization' },
-                    { key: 'can_manage_sub_users', label: 'Manage Sub-Users' }
-                  ].map((feature) => (
-                    <div key={feature.key} className="flex items-center space-x-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        subscriptionStatus?.[feature.key as keyof SubscriptionStatus] ? 'bg-green-500' : 'bg-gray-300'
-                      }`} />
-                      <span className="text-sm text-gray-600">{feature.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+    <div className={cn("space-y-6", className)}>
+      {/* Current Subscription Status */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <StatusIcon className="h-5 w-5" />
+                Subscription Status
+              </CardTitle>
+              <CardDescription>
+                Manage your subscription and billing preferences
+              </CardDescription>
             </div>
+            <Badge className={statusInfo.color}>
+              {statusInfo.status}
+            </Badge>
           </div>
+        </CardHeader>
+        <CardContent>
+          {subscriptionData ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Plan Information */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-blue-600" />
+                  <span className="font-medium">Current Plan</span>
+                </div>
+                <div className="text-2xl font-bold">
+                  {subscriptionData.plan.name}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {SubscriptionService.formatCurrency(subscriptionData.plan.price)}/{subscriptionData.plan.billing_cycle === 'monthly' ? 'month' : 'year'}
+                </div>
+              </div>
 
-          {/* Restrictions */}
-          {subscriptionStatus?.restrictions && subscriptionStatus.restrictions.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h3 className="font-medium text-yellow-800 mb-2">Current Restrictions</h3>
-              <ul className="text-sm text-yellow-700 space-y-1">
-                {subscriptionStatus.restrictions.map((restriction, index) => (
-                  <li key={index}>• {restriction}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+              {/* Billing Information */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-green-600" />
+                  <span className="font-medium">Next Billing</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {SubscriptionService.formatDate(subscriptionData.subscription.current_period_end)}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {subscriptionData.subscription.billing_cycle === 'monthly' ? 'Monthly' : 'Yearly'} billing
+                </div>
+              </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-            <div className="flex flex-wrap gap-3">
-              {!subscriptionStatus?.has_subscription && (
-                <button
-                  onClick={() => setActiveTab('plans')}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Choose a Plan
-                </button>
-              )}
-              {subscriptionStatus?.can_manage_organization && !organizationInfo && (
-                <button
-                  onClick={() => setShowUpgradeModal(true)}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Create Organization
-                </button>
-              )}
-              {subscriptionStatus?.can_manage_sub_users && organizationInfo && (
-                <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Invite Team Member
-                </button>
-              )}
-              {currentSubscription && (
-                <button
-                  onClick={handleCancelSubscription}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Cancel Subscription
-                </button>
+              {/* Usage Information */}
+              {subscriptionData.usage && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-purple-600" />
+                    <span className="font-medium">Usage This Period</span>
+                  </div>
+                  <div className="text-lg font-semibold">
+                    {subscriptionData.usage.usage_count} / {subscriptionData.usage.usage_limit || '∞'} books
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {subscriptionData.usage.usage_limit ? 
+                      `${Math.round((subscriptionData.usage.usage_count / subscriptionData.usage.usage_limit) * 100)}% used` :
+                      'Unlimited'
+                    }
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Plans Tab */}
-      {activeTab === 'plans' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {availablePlans.map((plan) => (
-              <div
-                key={plan.plan_id}
-                className={`bg-white rounded-lg shadow p-6 ${
-                  plan.popular ? 'ring-2 ring-blue-500' : ''
-                } ${subscriptionStatus?.plan_type === plan.plan_id ? 'bg-blue-50' : ''}`}
-              >
-                {plan.popular && (
-                  <div className="bg-blue-500 text-white text-xs font-medium px-2 py-1 rounded-full inline-block mb-4">
-                    Most Popular
-                  </div>
-                )}
-                <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold">${plan.price}</span>
-                  <span className="text-gray-600">/{plan.billing_cycle}</span>
-                </div>
-                <p className="text-gray-600 mb-4">{plan.description}</p>
-                <ul className="space-y-2 mb-6">
-                  {getPlanFeatures(plan.plan_id).map((feature, index) => (
-                    <li key={index} className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full" />
-                      <span className="text-sm text-gray-600">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => handleUpgrade(plan)}
-                  disabled={subscriptionStatus?.plan_type === plan.plan_id}
-                  className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                    subscriptionStatus?.plan_type === plan.plan_id
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  {subscriptionStatus?.plan_type === plan.plan_id ? 'Current Plan' : 'Choose Plan'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Organization Tab */}
-      {activeTab === 'organization' && (
-        <div className="space-y-6">
-          {organizationInfo ? (
-            <>
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Organization Details</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Name</h3>
-                    <p className="text-gray-600">{organizationInfo.name}</p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Slug</h3>
-                    <p className="text-gray-600">{organizationInfo.slug}</p>
-                  </div>
-                  {organizationInfo.description && (
-                    <div className="md:col-span-2">
-                      <h3 className="font-medium text-gray-900 mb-2">Description</h3>
-                      <p className="text-gray-600">{organizationInfo.description}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {subscriptionStatus?.can_manage_sub_users && (
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">Team Members</h2>
-                    <button
-                      onClick={() => setShowInviteModal(true)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Invite Member
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    {subUsers.map((subUser) => (
-                      <div key={subUser.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                            <span className="text-gray-600 font-medium">
-                              {subUser.username.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-gray-900">{subUser.username}</h3>
-                            <p className="text-sm text-gray-600">{subUser.email}</p>
-                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                              subUser.role === 'assistant' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                            }`}>
-                              {subUser.role}
-                            </span>
-                          </div>
-                        </div>
-                        {!subUser.is_owner && (
-                          <button
-                            onClick={() => handleRemoveSubUser(subUser.id)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
           ) : (
-            <div className="bg-white rounded-lg shadow p-6 text-center">
-              <h2 className="text-xl font-semibold mb-4">No Organization</h2>
-              <p className="text-gray-600 mb-6">
-                Create an organization to manage team members and collaborate on projects.
+            <div className="text-center py-8">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Active Subscription</h3>
+              <p className="text-muted-foreground mb-4">
+                Get started with a subscription to unlock all features
               </p>
-              <button
-                onClick={() => setShowUpgradeModal(true)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Create Organization
-              </button>
+              <Button onClick={() => setShowUpgradeModal(true)}>
+                <CreditCard className="h-4 w-4 mr-2" />
+                Choose a Plan
+              </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Subscription Management Actions */}
+      {subscriptionData && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Manage Subscription
+            </CardTitle>
+            <CardDescription>
+              Upgrade, downgrade, or cancel your subscription
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Upgrade Button */}
+              <Button 
+                variant="outline" 
+                className="h-auto p-4 flex flex-col items-center gap-2"
+                onClick={() => setShowUpgradeModal(true)}
+                disabled={isProcessing}
+              >
+                <ArrowUp className="h-6 w-6 text-green-600" />
+                <span className="font-medium">Upgrade Plan</span>
+                <span className="text-xs text-muted-foreground">Get more features</span>
+              </Button>
+
+              {/* Downgrade Button */}
+              <Button 
+                variant="outline" 
+                className="h-auto p-4 flex flex-col items-center gap-2"
+                onClick={() => setShowDowngradeModal(true)}
+                disabled={isProcessing || subscriptionData.subscription.status !== 'active'}
+              >
+                <ArrowDown className="h-6 w-6 text-yellow-600" />
+                <span className="font-medium">Downgrade</span>
+                <span className="text-xs text-muted-foreground">Reduce plan features</span>
+              </Button>
+
+              {/* Cancel/Reactivate Button */}
+              {subscriptionData.subscription.status === 'cancelled' ? (
+                <Button 
+                  variant="outline" 
+                  className="h-auto p-4 flex flex-col items-center gap-2"
+                  onClick={handleReactivate}
+                  disabled={isProcessing}
+                >
+                  <RotateCcw className="h-6 w-6 text-blue-600" />
+                  <span className="font-medium">Reactivate</span>
+                  <span className="text-xs text-muted-foreground">Restore subscription</span>
+                </Button>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  className="h-auto p-4 flex flex-col items-center gap-2"
+                  onClick={() => setShowCancelModal(true)}
+                  disabled={isProcessing}
+                >
+                  <XCircle className="h-6 w-6 text-red-600" />
+                  <span className="font-medium">Cancel</span>
+                  <span className="text-xs text-muted-foreground">End subscription</span>
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Feature Access Information */}
+      {subscriptionStatus && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Feature Access</CardTitle>
+            <CardDescription>
+              Features available with your current plan
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {subscriptionStatus.limits ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Books per month:</span>
+                    <Badge variant="outline">
+                      {subscriptionStatus.limits.books_per_month === -1 ? 'Unlimited' : subscriptionStatus.limits.books_per_month}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Analytics:</span>
+                    <Badge variant={subscriptionStatus.limits.analytics_access ? "default" : "secondary"}>
+                      {subscriptionStatus.limits.analytics_access ? 'Available' : 'Not Available'}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Priority Support:</span>
+                    <Badge variant={subscriptionStatus.limits.priority_support ? "default" : "secondary"}>
+                      {subscriptionStatus.limits.priority_support ? 'Available' : 'Not Available'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">API Access:</span>
+                    <Badge variant={subscriptionStatus.limits.api_access ? "default" : "secondary"}>
+                      {subscriptionStatus.limits.api_access ? 'Available' : 'Not Available'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                No feature information available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modals */}
+      <CheckoutModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onSuccess={() => {
+          setShowUpgradeModal(false);
+          loadSubscriptionData();
+          onSubscriptionChange?.();
+        }}
+        currentPlanId={subscriptionData?.subscription?.plan?.plan_id}
+        triggerSource="subscription_manager"
+      />
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <Card className="mx-4 max-w-md w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                Cancel Subscription
+              </CardTitle>
+              <CardDescription>
+                Are you sure you want to cancel your subscription?
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Reason for cancellation (optional)</label>
+                <textarea
+                  className="w-full p-2 border rounded-md"
+                  rows={3}
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  placeholder="Help us improve by sharing your reason..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Additional feedback (optional)</label>
+                <textarea
+                  className="w-full p-2 border rounded-md"
+                  rows={2}
+                  value={cancellationFeedback}
+                  onChange={(e) => setCancellationFeedback(e.target.value)}
+                  placeholder="Any additional comments..."
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelModal(false)}
+                  className="flex-1"
+                >
+                  Keep Subscription
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleCancel(true)}
+                  disabled={isProcessing}
+                  className="flex-1"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    'Cancel at Period End'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* Invite Modal */}
-      {showInviteModal && (
-        <InviteSubUserModal
-          onClose={() => setShowInviteModal(false)}
-          onInvite={handleInviteSubUser}
-        />
+      {/* Downgrade Modal */}
+      {showDowngradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <Card className="mx-4 max-w-md w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ArrowDown className="h-5 w-5 text-yellow-600" />
+                Downgrade Subscription
+              </CardTitle>
+              <CardDescription>
+                Choose a lower plan for your subscription
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Downgrading will take effect at the end of your current billing period.
+                </p>
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => handleDowngrade('basic')}
+                    disabled={isProcessing}
+                  >
+                    <span className="font-medium">Basic Plan</span>
+                    <span className="ml-auto text-sm text-muted-foreground">$9/month</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => handleDowngrade('free')}
+                    disabled={isProcessing}
+                  >
+                    <span className="font-medium">Free Plan</span>
+                    <span className="ml-auto text-sm text-muted-foreground">$0/month</span>
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDowngradeModal(false)}
+                  className="flex-1"
+                >
+                  Keep Current Plan
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
-    </div>
-  );
-};
-
-// Invite Sub-User Modal Component
-interface InviteSubUserModalProps {
-  onClose: () => void;
-  onInvite: (email: string, username: string, role: string) => void;
-}
-
-const InviteSubUserModal: React.FC<InviteSubUserModalProps> = ({ onClose, onInvite }) => {
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [role, setRole] = useState('assistant');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (email && username) {
-      onInvite(email, username, role);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-semibold mb-4">Invite Team Member</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="assistant">Assistant</option>
-              <option value="marketer">Marketer</option>
-            </select>
-          </div>
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Invite
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 };

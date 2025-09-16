@@ -10,7 +10,8 @@ import { analyticsApi } from '@/lib/api';
 import { useUIStore } from '@/stores/uiStore';
 import { RoleBased } from '@/components/shared/RoleBased';
 import { useAuth } from '@/hooks/useAuth';
-import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
+import { toast } from '@/lib/toast';
 
 export const Analytics: React.FC = () => {
   const { user } = useAuth();
@@ -179,12 +180,17 @@ export const Analytics: React.FC = () => {
         <BooksTable dateRange={dateRange} />
       </div>
 
-      {/* Plan Upgrade Modal */}
-      <PlanUpgradeModal
+      {/* Checkout Modal */}
+      <CheckoutModal
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
+        onSuccess={() => {
+          setShowUpgradeModal(false);
+          toast.success('Subscription upgraded successfully! You can now access analytics.');
+        }}
         requiredFeature="Analytics & Performance Metrics"
-        currentPlan={user?.subscription?.plan || 'free'}
+        currentPlanId={user?.subscription?.plan || 'free'}
+        triggerSource="analytics_access"
       />
     </RoleBased>
   );

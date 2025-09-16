@@ -191,7 +191,7 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className=" w-full max-w-md">
+      <Card className="  max-w-md">
         <CardHeader className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -277,7 +277,7 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
             </div>
           ) : (
             <>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-blue-800 mb-1">
@@ -297,7 +297,7 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
                     Visit KDP
                   </Button>
                 </div>
-              </div>
+              </div> */}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">

@@ -29,7 +29,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
+import { toast } from '@/lib/toast';
 import { KDPCredentialsModal } from '@/components/shared/KDPCredentialsModal';
 import { 
   AdditionalService,
@@ -2331,12 +2332,17 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
         </div>
       )}
 
-      {/* Plan Upgrade Modal */}
-      <PlanUpgradeModal
+      {/* Checkout Modal */}
+      <CheckoutModal
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
+        onSuccess={() => {
+          setShowUpgradeModal(false);
+          toast.success('Subscription upgraded successfully! You can now create books.');
+        }}
         requiredFeature="Book Creation"
-        currentPlan={user?.subscription?.plan || 'free'}
+        currentPlanId={user?.subscription?.plan || 'free'}
+        triggerSource="intelligent_assistant"
       />
 
       {/* KDP Credentials Modal */}

@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Check, Crown, Star, Zap, BarChart3, MessageCircle, Loader2 } from 'lucide-react';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { usePaymentApi } from '@/hooks/usePaymentApi';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/lib/toast';
 import { SubscriptionPlan } from '@/api/subscriptionService';
@@ -13,19 +12,23 @@ import { cn } from '@/lib/utils';
 interface PlanUpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   requiredFeature?: string;
   currentPlan?: string;
+  currentPlanId?: string;
+  onNavigateToCheckout?: (selectedPlan: SubscriptionPlan) => void;
 }
 
 export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
   isOpen,
   onClose,
   requiredFeature,
-  currentPlan = 'free'
+  currentPlan = 'free',
+  currentPlanId,
+  onNavigateToCheckout
 }) => {
   const { user } = useAuth();
   const subscriptionApi = useSubscriptionApi();
-  const paymentApi = usePaymentApi();
   
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
@@ -50,7 +53,8 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
         console.log('✅ Plans loaded successfully:', plansData.length, 'plans');
         setPlans(plansData);
         // Auto-select the first paid plan if no current plan
-        if (!currentPlan || currentPlan === 'free') {
+        const effectiveCurrentPlan = currentPlanId || currentPlan;
+        if (!effectiveCurrentPlan || effectiveCurrentPlan === 'free') {
           const firstPaidPlan = plansData.find(plan => plan.plan_id !== 'free');
           if (firstPaidPlan) {
             setSelectedPlan(firstPaidPlan);
@@ -70,58 +74,47 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
   };
 
   const handleUpgrade = async (plan: SubscriptionPlan) => {
-    if (!plan || !user) {
+    // Comprehensive validation
+    if (!user) {
+      toast.error('You must be logged in to upgrade your subscription');
+      return;
+    }
+
+    if (!plan) {
       toast.error('Please select a plan');
       return;
     }
 
-    if (plan.plan_id === currentPlan) {
+    const effectiveCurrentPlan = currentPlanId || currentPlan;
+    if (plan.plan_id === effectiveCurrentPlan) {
       toast.error('You are already on this plan');
       return;
     }
 
-    setIsProcessing(true);
-    try {
-      // Create checkout session for the selected plan
-      const checkoutData = {
-        amount: plan.price,
-        currency: 'USD',
-        customer_email: user.email,
-        customer_name: user.name || user.email,
-        description: `${plan.name} Subscription`,
-        success_url: `${window.location.origin}/account?subscription=success`,
-        cancel_url: `${window.location.origin}/account?subscription=cancelled`,
-        line_items: [{
-          product_name: plan.name,
-          product_description: plan.description || `${plan.name} subscription plan`,
-          quantity: 1,
-          unit_amount: paymentApi.convertToCents(plan.price),
-          tax_amount: 0,
-          tax_rate: 0
-        }],
-        metadata: {
-          plan_id: plan.plan_id,
-          billing_cycle: plan.billing_cycle,
-          user_id: user.id
-        },
-        payment_method_types: ['card'],
-        idempotency_key: paymentApi.generateIdempotencyKey()
-      };
-
-      const checkoutSession = await paymentApi.createCheckoutSession(checkoutData);
-      
-      if (checkoutSession && checkoutSession.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = checkoutSession.url;
-      } else {
-        toast.error('Failed to create checkout session');
-      }
-    } catch (error) {
-      console.error('Payment error:', error);
-      toast.error('Failed to process payment. Please try again.');
-    } finally {
-      setIsProcessing(false);
+    if (!plan.price || plan.price <= 0) {
+      toast.error('Invalid plan pricing. Please try again.');
+      return;
     }
+
+    if (!user.email) {
+      toast.error('Email address is required for payment processing');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    // If onNavigateToCheckout is provided, use it to navigate to CheckoutModal
+    if (onNavigateToCheckout) {
+      console.log('Navigating to CheckoutModal with plan:', plan);
+      onNavigateToCheckout(plan);
+      onClose(); // Close the PlanUpgradeModal
+      setIsProcessing(false);
+      return;
+    }
+
+    // Fallback: If no navigation handler is provided, show helpful message
+    toast.info('Please use the PlanUpgradeFlow component for the complete upgrade experience with payment processing.');
+    setIsProcessing(false);
   };
 
   const getDefaultFeatures = (planId: string) => {
@@ -195,11 +188,11 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
                 <div>
                   <h3 className="font-semibold text-gray-900">Current Plan</h3>
                   <p className="text-sm text-gray-600">
-                    You're currently on the <span className="font-medium">{currentPlan}</span> plan
+                    You're currently on the <span className="font-medium">{currentPlanId || currentPlan}</span> plan
                   </p>
                 </div>
                 <Badge variant="outline" className="capitalize">
-                  {currentPlan}
+                  {currentPlanId || currentPlan}
                 </Badge>
               </div>
             </div>
@@ -214,7 +207,8 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
                 </div>
               ) : (
                 plans && Array.isArray(plans) && plans.map((plan) => {
-                  const isCurrentPlan = plan.plan_id === currentPlan;
+                  const effectiveCurrentPlan = currentPlanId || currentPlan;
+                  const isCurrentPlan = plan.plan_id === effectiveCurrentPlan;
                   const isPopular = plan.popular || plan.plan_id === 'pro';
                   const isSelected = selectedPlan?.id === plan.id;
                   
@@ -371,7 +365,7 @@ export const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
                 >
                   Maybe Later
                 </Button>
-                {selectedPlan && selectedPlan.plan_id !== currentPlan && (
+                {selectedPlan && selectedPlan.plan_id !== (currentPlanId || currentPlan) && (
                   <Button
                     onClick={() => handleUpgrade(selectedPlan)}
                     disabled={isProcessing}

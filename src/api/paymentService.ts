@@ -61,6 +61,7 @@ export interface CreatePaymentIntentRequest {
   payment_method_types?: string[];
   confirm?: boolean;
   capture_method: 'automatic' | 'manual';
+  return_url?: string;
   line_items?: PaymentLineItem[];
   tax_amount?: number;
   tax_rate?: number;
@@ -178,7 +179,46 @@ export interface WebhookRetryResponse {
 export class PaymentService {
   // Checkout Sessions
   static async createCheckoutSession(data: CreateCheckoutSessionRequest): Promise<AxiosResponse<CheckoutSessionResponse>> {
-    return apiClient.post('/payment/create-checkout-session', data);
+    try {
+      // Validate required fields
+      if (!data.customer_email) {
+        throw new Error('Customer email is required');
+      }
+      if (!data.amount || data.amount <= 0) {
+        throw new Error('Valid amount is required');
+      }
+      if (!data.success_url) {
+        throw new Error('Success URL is required');
+      }
+      if (!data.cancel_url) {
+        throw new Error('Cancel URL is required');
+      }
+
+      // Ensure idempotency key is present
+      if (!data.idempotency_key) {
+        data.idempotency_key = PaymentService.generateIdempotencyKey();
+      }
+
+      console.log('Creating checkout session with data:', data);
+      
+      const response = await apiClient.post('/payment/create-checkout-session', data);
+      
+      console.log('Checkout session response:', response.data);
+      
+      // Validate response structure
+      if (!response.data) {
+        throw new Error('No response data received');
+      }
+
+      if (!response.data.url && !response.data.data?.url) {
+        throw new Error('No checkout URL in response');
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      throw error;
+    }
   }
 
   // Payment Intents

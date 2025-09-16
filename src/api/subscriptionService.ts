@@ -118,6 +118,19 @@ export interface SubscriptionCancelRequest {
   feedback?: string;
 }
 
+export interface SubscriptionDowngradeRequest {
+  new_plan_id: string;
+  billing_cycle?: 'monthly' | 'yearly';
+  prorate?: boolean;
+  immediate?: boolean;
+  downgrade_reason?: string;
+}
+
+export interface SubscriptionReactivateRequest {
+  new_plan_id?: string;
+  billing_cycle?: 'monthly' | 'yearly';
+}
+
 export interface SubscriptionUsageCheckRequest {
   usage_type: string;
   increment?: boolean;
@@ -174,6 +187,14 @@ export class SubscriptionService {
 
   static async cancelSubscription(data: SubscriptionCancelRequest): Promise<AxiosResponse<UserSubscription>> {
     return apiClient.post('/subscription/my-subscription/cancel', data);
+  }
+
+  static async downgradeSubscription(data: SubscriptionDowngradeRequest): Promise<AxiosResponse<UserSubscription>> {
+    return apiClient.post('/subscription/my-subscription/downgrade', data);
+  }
+
+  static async reactivateSubscription(data?: SubscriptionReactivateRequest): Promise<AxiosResponse<UserSubscription>> {
+    return apiClient.post('/subscription/my-subscription/reactivate', data || {});
   }
 
   // Usage and Limits
@@ -357,6 +378,8 @@ export const {
   getMySubscriptionStatus,
   upgradeSubscription,
   cancelSubscription,
+  downgradeSubscription,
+  reactivateSubscription,
   checkUsageLimits,
   getMyFeatures,
   checkFeatureAccess,

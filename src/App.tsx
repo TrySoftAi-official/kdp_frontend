@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary } from '@/components/error/ErrorBoundary';
 import { Dashboard } from '@/pages/Dashboard';
 import { Login } from '@/pages/Login';
 import { CheckEmail } from '@/pages/CheckEmail';
@@ -19,6 +19,13 @@ import { MySubscriptionPage } from '@/pages/MySubscription';
 import { PaymentCallback } from '@/pages/PaymentCallback';
 import { DynamicApiDemo } from '@/components/DynamicApiDemo';
 import { IntelligentAssistant } from '@/pages/IntelligentAssistant';
+import { CheckoutSuccess } from '@/pages/CheckoutSuccess';
+import { CheckoutFailure } from '@/pages/CheckoutFailure';
+import { CheckoutError } from '@/pages/CheckoutError';
+import { PaymentFlowTest } from '@/pages/PaymentFlowTest';
+import { OrganizationManagement } from '@/pages/OrganizationManagement';
+import { DebugPage } from '@/pages/DebugPage';
+import { SubscriptionDemo } from '@/pages/SubscriptionDemo';
 import { useAuth } from '@/hooks/useAuth';
 import { BookPrompt } from './components/create-book/BookPrompt';
 
@@ -51,6 +58,11 @@ function AppContent() {
       <Route path="/auth/passwordless/callback" element={<PasswordlessCallback />} />
       <Route path="/auth/google/callback" element={<GoogleCallback />} />
       
+      {/* Checkout routes (public but may require auth context) */}
+      <Route path="/checkout/success" element={<CheckoutSuccess />} />
+      <Route path="/checkout/failure" element={<CheckoutFailure />} />
+      <Route path="/checkout/error" element={<CheckoutError />} />
+      
       {/* Redirect route for old port magic links */}
       <Route path="/passwordless-login-redirect" element={<PasswordlessRedirect />} />
 
@@ -81,6 +93,25 @@ function AppContent() {
         <Route path="api-demo" element={<DynamicApiDemo />} />
         <Route path="intelligent-assistant" element={<IntelligentAssistant />} />
         <Route path="BookPrompt" element={<BookPrompt onGenerateBook={() => {}} />} />
+        
+        {/* Organization Management */}
+        <Route 
+          path="organization" 
+          element={
+            <ProtectedRoute allowedRoles={['owner', 'admin']}>
+              <OrganizationManagement />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Debug and Demo Routes (Development Only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <>
+            <Route path="debug" element={<DebugPage />} />
+            <Route path="subscription-demo" element={<SubscriptionDemo />} />
+            <Route path="payment-test" element={<PaymentFlowTest />} />
+          </>
+        )}
         {/* Catch all route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

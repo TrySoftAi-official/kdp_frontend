@@ -12,7 +12,8 @@ import {
   Lock,
   Unlock,
   Eye,
-  EyeOff
+  EyeOff,
+  BarChart3
 } from 'lucide-react';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
 import { toast } from '@/lib/toast';

@@ -5,20 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MySubscription } from '@/components/subscription/MySubscription';
 import { BillingHistory } from '@/components/subscription/BillingHistory';
-import { SubscriptionPlansModal } from '@/components/subscription/SubscriptionPlansModal';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { usePaymentFlow } from '@/hooks/usePaymentFlow';
 import { toast } from '@/lib/toast';
 import { UserSubscriptionWithPlanResponse } from '@/api/subscriptionService';
 
 export const MySubscriptionPage: React.FC = () => {
   const { user } = useAuth();
   const subscriptionApi = useSubscriptionApi();
-  const paymentFlow = usePaymentFlow();
   
   const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
 
   useEffect(() => {
@@ -41,7 +38,6 @@ export const MySubscriptionPage: React.FC = () => {
   }, []);
 
   const loadSubscriptionData = async () => {
-    setIsLoading(true);
     try {
       const data = await subscriptionApi.getMySubscription();
       if (data) {
@@ -49,8 +45,6 @@ export const MySubscriptionPage: React.FC = () => {
       }
     } catch (error) {
       toast.error('Failed to load subscription data');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -205,7 +199,7 @@ export const MySubscriptionPage: React.FC = () => {
       </Tabs>
 
       {/* Subscription Plans Modal */}
-      <SubscriptionPlansModal
+      <CheckoutModal
         isOpen={showPlansModal}
         onClose={handlePlansModalClose}
         onSuccess={() => {
@@ -213,6 +207,7 @@ export const MySubscriptionPage: React.FC = () => {
           loadSubscriptionData();
         }}
         currentPlanId={subscriptionData?.subscription?.plan?.plan_id}
+        triggerSource="my_subscription"
       />
     </div>
   );

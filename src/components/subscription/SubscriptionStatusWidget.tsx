@@ -1,5 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { CreditCard, Crown, AlertTriangle, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  CreditCard, 
+  Crown, 
+  AlertTriangle, 
+  CheckCircle, 
+  Loader2, 
+  ExternalLink,
+  Settings,
+  Calendar,
+  Zap,
+  BarChart3,
+  MessageCircle,
+  Palette,
+  Code,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  XCircle
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,32 +25,45 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
 import { usePaymentApi } from '@/hooks/usePaymentApi';
+import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
 import { toast } from '@/lib/toast';
-import { UserSubscriptionWithPlanResponse, SubscriptionStatus } from '@/api/subscriptionService';
+import { 
+  UserSubscriptionWithPlanResponse, 
+  SubscriptionStatus,
+  SubscriptionService 
+} from '@/api/subscriptionService';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 interface SubscriptionStatusWidgetProps {
   showUpgradeButton?: boolean;
   showUsageDetails?: boolean;
+  showManagementActions?: boolean;
   compact?: boolean;
   onUpgrade?: () => void;
+  onSubscriptionChange?: () => void;
 }
 
 export const SubscriptionStatusWidget: React.FC<SubscriptionStatusWidgetProps> = ({
   showUpgradeButton = true,
   showUsageDetails = true,
+  showManagementActions = false,
   compact = false,
-  onUpgrade
+  onUpgrade,
+  onSubscriptionChange
 }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const subscriptionApi = useSubscriptionApi();
   const paymentApi = usePaymentApi();
+  const { getUsageInfo, getCurrentPlan, getSubscriptionStatus } = useFeatureEnforcement();
   
   const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDowngradeModal, setShowDowngradeModal] = useState(false);
 
   useEffect(() => {
     loadSubscriptionData();

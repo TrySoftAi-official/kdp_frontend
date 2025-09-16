@@ -1,8 +1,9 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles } from 'lucide-react';
-import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/lib/toast';
 import { CreateBookProvider, useCreateBookContext } from './CreateBookContext';
 import { HotSellingGenres } from './HotSellingGenres';
 import { BookPrompt } from './BookPrompt';
@@ -288,11 +289,16 @@ const CreateBookContent: React.FC = () => {
         />
 
         {/* Plan Upgrade Modal */}
-        <PlanUpgradeModal
+        <CheckoutModal
           isOpen={showUpgradeModal}
           onClose={() => setShowUpgradeModal(false)}
+          onSuccess={() => {
+            setShowUpgradeModal(false);
+            toast.success('Subscription upgraded successfully! You can now create books.');
+          }}
           requiredFeature="Book Creation"
-          currentPlan={user?.subscription?.plan || 'free'}
+          currentPlanId={user?.subscription?.plan || 'free'}
+          triggerSource="create_book_component"
         />
       </div>
     </div>

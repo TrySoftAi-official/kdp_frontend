@@ -39,8 +39,9 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionIntegration } from '@/hooks/useSubscriptionIntegration';
+import { toast } from '@/lib/toast';
 import { BookCreationGuard } from '@/components/subscription/SubscriptionGuard';
-import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { 
   AdditionalService, 
   Book as ApiBook,
@@ -1687,12 +1688,17 @@ Remember: Small changes add up to big results over time. Your future self will t
          </div>
        )}
 
-       {/* Plan Upgrade Modal */}
-       <PlanUpgradeModal
+       {/* Checkout Modal */}
+       <CheckoutModal
          isOpen={showUpgradeModal}
          onClose={() => setShowUpgradeModal(false)}
+         onSuccess={() => {
+           setShowUpgradeModal(false);
+           toast.success('Subscription upgraded successfully! You can now create books.');
+         }}
          requiredFeature="Book Creation"
-         currentPlan={user?.subscription?.plan || 'free'}
+         currentPlanId={user?.subscription?.plan || 'free'}
+         triggerSource="book_creation"
        />
      </div>
     </BookCreationGuard>

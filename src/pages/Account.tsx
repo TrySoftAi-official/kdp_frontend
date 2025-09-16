@@ -10,7 +10,7 @@ import { useUserApi } from '@/hooks/useUserApi';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
 import { ROLES, SUBSCRIPTION_PLANS } from '@/lib/constants';
 import { toast } from '@/lib/toast';
-import { SubscriptionPlansModal } from '@/components/subscription/SubscriptionPlansModal';
+import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { BillingHistory } from '@/components/subscription/BillingHistory';
 import { SubscriptionStatusWidget } from '@/components/subscription/SubscriptionStatusWidget';
 
@@ -535,7 +535,7 @@ export const Account: React.FC = () => {
       </div>
 
       {/* Subscription Plans Modal */}
-      <SubscriptionPlansModal
+      <CheckoutModal
         isOpen={showPlansModal}
         onClose={() => setShowPlansModal(false)}
         onSuccess={() => {
@@ -543,6 +543,7 @@ export const Account: React.FC = () => {
           loadUserData();
         }}
         currentPlanId={subscription?.plan}
+        triggerSource="account"
       />
     </div>
   );
