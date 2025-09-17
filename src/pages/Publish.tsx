@@ -10,18 +10,21 @@ import { Separator } from '@/components/ui/separator';
 import { 
   BookOpen, 
   Upload, 
- 
   Globe, 
   DollarSign, 
-
   CheckCircle,
   AlertCircle,
-
   Download,
   Eye,
-  Edit
+  Edit,
+  CloudCog
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { 
+  AdditionalService, 
+  DatabaseBook
+} from '@/api/additionalService';
+
 
 interface BookForPublishing {
   id: string;
@@ -44,17 +47,52 @@ interface BookForPublishing {
   };
 }
 
+
+
 export const Publish: React.FC = () => {
   const [books, setBooks] = useState<BookForPublishing[]>([]);
   const [selectedBook, setSelectedBook] = useState<BookForPublishing | null>(null);
-
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load saved books from localStorage
-    const savedBooks = JSON.parse(localStorage.getItem('savedBooks') || '[]');
-    setBooks(savedBooks);
+    const fetchBooks = async () => {
+      try {
+        const response = await AdditionalService.getBooksFromDatabase();
+        // Filter books with status "Uploaded" and map to BookForPublishing format
+        const uploadedBooks = response.data.books
+          .filter(book => book.status === "Uploaded")
+          .map(book => ({
+            id: book.id.toString(),
+            title: book.book_title,
+            content: book.description || '',
+            coverUrl: book.cover_path || '',
+            niche: book.primary_category || '',
+            targetAudience: '',
+            wordCount: 0,
+            createdAt: book.created_at,
+            status: 'ready' as const,
+            metadata: {
+              subtitle: '',
+              description: book.description,
+              keywords: book.keywords ? book.keywords.split(',') : [],
+              categories: [book.primary_category, book.secondary_category].filter(Boolean) as string[],
+              price: book.book_price,
+              language: 'English',
+              isbn: ''
+            }
+          }));
+        setBooks(uploadedBooks);
+      } catch (error) {
+        console.error('Error fetching books:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBooks();
   }, []);
 
+  console.log('Publish',books);
   const handlePublish = async (bookId: string) => {
     // Simulate publishing process
     setBooks(prev => prev.map(book => 
@@ -101,6 +139,17 @@ export const Publish: React.FC = () => {
     'Russian'
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading books...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -129,12 +178,9 @@ export const Publish: React.FC = () => {
             <div>
               <h3 className="text-lg font-semibold">No Books Ready for Publishing</h3>
               <p className="text-muted-foreground">
-                Create and save books first, then come back here to publish them to Amazon KDP.
+                Upload books first, then come back here to publish them to Amazon KDP.
               </p>
             </div>
-            <Button asChild>
-              <a href="/create">Create Your First Book</a>
-            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -476,4 +522,3 @@ export const Publish: React.FC = () => {
     </div>
   );
 };
-

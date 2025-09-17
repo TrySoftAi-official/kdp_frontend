@@ -59,7 +59,7 @@ export const useStripePayment = (): UseStripePaymentReturn => {
         payment_method_types: ['card'], // Only use card for now, other methods need to be enabled in Stripe dashboard
         idempotency_key: paymentApi.generateIdempotencyKey(),
         confirm: false, // Don't confirm immediately, let Stripe Elements handle it
-        capture_method: 'automatic' as const,
+         capture_method: 'automatic' as const,
       };
 
       console.log('Creating payment intent with data:', paymentIntentData);

@@ -248,12 +248,20 @@ export const useAuthStore = create<AuthState>()(
           console.error('Logout API call failed:', error);
           // Continue with logout even if API call fails
         } finally {
+          // Preserve KDP session during logout
+          const kdpSession = localStorage.getItem('amazon_kdp_session');
+          
           // Clear all authentication data
           localStorage.removeItem('access_token');
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
+          
+          // Restore KDP session if it existed
+          if (kdpSession) {
+            localStorage.setItem('amazon_kdp_session', kdpSession);
+          }
           
           set({ 
             user: null, 

@@ -203,7 +203,7 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
   const isPastDue = subscription?.status === 'past_due';
 
   // If no subscription data, show the no subscription state
-  if (!subscriptionData || !subscription || !plan) {
+  if (!subscriptionData || !subscriptionData.subscription || !subscriptionData.plan) {
     return (
       <Card>
         <CardHeader>

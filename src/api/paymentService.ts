@@ -175,6 +175,19 @@ export interface WebhookRetryResponse {
   total_failed?: number;
 }
 
+export interface CreateBillingPortalSessionRequest {
+  customer_id: string;
+  return_url: string;
+}
+
+export interface BillingPortalSessionResponse {
+  id: string;
+  url: string;
+  customer_id: string;
+  return_url: string;
+  created_at: string;
+}
+
 // Payment Service Class
 export class PaymentService {
   // Checkout Sessions
@@ -244,6 +257,11 @@ export class PaymentService {
   // Webhooks
   static async retryWebhooks(): Promise<AxiosResponse<WebhookRetryResponse>> {
     return apiClient.post('/payment/webhook/retry');
+  }
+
+  // Billing Portal
+  static async createBillingPortalSession(data: CreateBillingPortalSessionRequest): Promise<AxiosResponse<BillingPortalSessionResponse>> {
+    return apiClient.post('/payment/create-billing-portal-session', data);
   }
 
   // Helper methods
@@ -353,6 +371,7 @@ export const {
   calculateTax,
   createRefund,
   retryWebhooks,
+  createBillingPortalSession,
   formatAmount,
   convertToCents,
   convertFromCents,

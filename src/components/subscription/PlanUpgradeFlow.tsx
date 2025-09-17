@@ -63,7 +63,6 @@ export const PlanUpgradeFlow: React.FC<PlanUpgradeFlowProps> = ({
         onSuccess={onSuccess}
         requiredFeature={requiredFeature}
         currentPlan={currentPlan}
-        currentPlanId={currentPlanId}
         onNavigateToCheckout={handleNavigateToCheckout}
       />
 
@@ -72,11 +71,8 @@ export const PlanUpgradeFlow: React.FC<PlanUpgradeFlowProps> = ({
         isOpen={showCheckout}
         onClose={handleCheckoutClose}
         onSuccess={handleCheckoutSuccess}
-        currentPlanId={currentPlanId}
         requiredFeature={requiredFeature}
         triggerSource={triggerSource}
-        preselectedPlan={selectedPlan || undefined}
-        onPlanSelected={setSelectedPlan}
       />
     </>
   );

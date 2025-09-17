@@ -13,7 +13,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { AdditionalService } from '@/api/additionalService';
-import AdditionalServiceDefault, { getKdpLoginStatus } from '@/api/additionalService';
+import AdditionalServiceDefault from '@/api/additionalService';
 
 interface KDPCredentialsModalProps {
   isOpen: boolean;
@@ -76,30 +76,46 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
       
       if (response?.data) {
         const data = response.data as any;
-        const isValid = data?.success === true || data?.valid === true || data?.isValid === true;
+        console.log('KDP Config Response:', data);
+        
+        // Check for success indicators in the response
+        const isValid = data?.success === true || 
+                       data?.valid === true || 
+                       data?.isValid === true ||
+                       data?.message?.toLowerCase().includes('success') ||
+                       data?.message?.toLowerCase().includes('saved') ||
+                       data?.message?.toLowerCase().includes('updated');
         
         if (isValid) {
-        // Store the connection status in localStorage
-        const kdpSession = {
-          isConnected: true,
-          isValid: true,
-          lastConnected: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
-          email: credentials.kdp_email,
-          method: 'credentials'
-        };
-        localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
-        
-          // Notify parent of success
-          onSuccess();
+          // Store the connection status in localStorage
+          const kdpSession = {
+            isConnected: true,
+            isValid: true,
+            lastConnected: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+            email: credentials.kdp_email,
+            method: 'credentials'
+          };
+          localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
+          
+          // Show success message
+          setSuccess(true);
+          console.log('KDP credentials saved successfully');
+          
+          // Notify parent of success after a short delay
+          setTimeout(() => {
+            onSuccess();
+          }, 1000);
         } else {
-          const message = data?.message || 'Invalid Amazon KDP credentials. Please try again.';
+          const message = data?.message || data?.error || 'Invalid Amazon KDP credentials. Please try again.';
           setError(message);
+          console.error('KDP credentials validation failed:', message);
           try { window.alert(message); } catch {}
         }
       } else {
         const message = 'Failed to save KDP credentials. Please try again.';
         setError(message);
+        console.error('KDP config API returned no data');
         try { window.alert(message); } catch {}
       }
     } catch (error: any) {
@@ -111,48 +127,55 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
       setIsSubmitting(false);
       // Start polling login status if we attempted submission
       try {
-        setPendingEmail(credentials.kdp_email);
-        setIsPolling(true);
+        // setIsPolling(true);
         startPollingLoginStatus(credentials.kdp_email);
       } catch {}
     }
   };
 
-  const startPollingLoginStatus = (email: string) => {
+  const startPollingLoginStatus = (_email: string) => {
     let attempts = 0;
-    const maxAttempts = 30; // ~90s if intervalMs=3000
+    const maxAttempts = 20; // ~60s if intervalMs=3000
     const intervalMs = 3000;
 
     const poll = async () => {
       attempts += 1;
+      console.log(`Polling KDP login status (attempt ${attempts}/${maxAttempts})`);
+      
       try {
         const resp = await AdditionalServiceDefault.getKdpLoginStatus();
         const data = resp?.data as any;
-        if (data?.isConnected) {
+        console.log('KDP Login Status Response:', data);
+        
+        if (data?.isConnected && data?.email) {
           const kdpSession = {
             isConnected: true,
             isValid: true,
             lastConnected: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            email: data?.email || email,
+            email: data.email || _email,
             method: 'credentials'
           };
           localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
-          setIsPolling(false);
+          // setIsPolling(false);
+          console.log('KDP login verified successfully');
           try { onSuccess(); } catch {}
           return; // stop polling
         }
 
         if (data && data.isConnected === false && data.error) {
-          setIsPolling(false);
+          // setIsPolling(false);
+          console.error('KDP login failed:', data.error);
           try { window.alert(data.error); } catch {}
           return;
         }
       } catch (e: any) {
+        console.error(`KDP login status check failed (attempt ${attempts}):`, e);
         // transient errors; continue until attempts exhausted
         if (attempts >= maxAttempts) {
-          setIsPolling(false);
-          try { window.alert(e?.message || 'Failed to verify KDP login status.'); } catch {}
+          // setIsPolling(false);
+          console.error('KDP login verification timed out after max attempts');
+          try { window.alert(e?.message || 'Failed to verify KDP login status after multiple attempts.'); } catch {}
           return;
         }
       }
@@ -160,8 +183,9 @@ export const KDPCredentialsModal: React.FC<KDPCredentialsModalProps> = ({
       if (attempts < maxAttempts) {
         setTimeout(poll, intervalMs);
       } else {
-        setIsPolling(false);
-        try { window.alert('KDP login verification timed out.'); } catch {}
+        // setIsPolling(false);
+        console.error('KDP login verification timed out');
+        try { window.alert('KDP login verification timed out. Please try again.'); } catch {}
       }
     };
 

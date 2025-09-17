@@ -218,6 +218,34 @@
     wordCount?: number;
   }
 
+  // Database Book Types (matching the API response)
+  export interface DatabaseBook {
+    id: number;
+    book_title: string;
+    author_first_name: string;
+    author_last_name: string;
+    author_name: string;
+    description: string;
+    primary_category: string;
+    secondary_category: string;
+    keywords: string;
+    book_price: number;
+    status: string;
+    pdf_path: string;
+    cover_path: string;
+    manuscript_filename: string;
+    cover_filename: string;
+    kdp_form_data: Record<string, any>;
+    created_at: string;
+    updated_at: string;
+    kdp_email?: string;
+    kdp_account_email?: string;
+  }
+
+  export interface DatabaseBooksResponse {
+    books: DatabaseBook[];
+  }
+
   export interface BooksResponse {
     books: Book[];
     total: number;
@@ -544,6 +572,10 @@
       return transformedResponse;
     }
 
+    static async getBooksFromDatabase(): Promise<AxiosResponse<DatabaseBooksResponse>> {
+      return additionalServiceClient.get('/books/database');
+    }
+
     static async getBookByAsin(asin: string): Promise<AxiosResponse<BookByAsinResponse>> {
       const response = await additionalServiceClient.get(`/books/${asin}`);
       
@@ -776,6 +808,32 @@
       
       return { isValid: true };
     }
+
+    // Account Status Methods
+    static async getAccountStatus(): Promise<AxiosResponse<AccountStatus>> {
+      return additionalServiceClient.get('/account-status');
+    }
+
+    static async getAllAccounts(): Promise<AxiosResponse<AllAccountsResponse>> {
+      return additionalServiceClient.get('/all-accounts');
+    }
+  }
+
+  // Account Status Types
+  export interface AccountStatus {
+    email: string;
+    uploads_count: number;
+    max_uploads: number;
+    remaining_uploads: number;
+    last_upload_date?: string;
+    is_active: boolean;
+    can_upload: boolean;
+    status_message: string;
+  }
+
+  export interface AllAccountsResponse {
+    accounts: AccountStatus[];
+    total: number;
   }
 
   // Export individual functions for convenience
@@ -797,8 +855,11 @@
     getKdpLoginStatus,
     getEnvStatus,
     getBooks,
+    getBooksFromDatabase,
     getBookByAsin,
     viewCover,
+    getAccountStatus,
+    getAllAccounts,
     formatUploadProgress,
     getUploadStatusColor,
     getQueueStatusColor,

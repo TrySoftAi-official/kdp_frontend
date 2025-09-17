@@ -28,8 +28,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { toast } from '@/lib/toast';
 import { KDPCredentialsModal } from '@/components/shared/KDPCredentialsModal';
 import { 
@@ -86,7 +84,6 @@ interface AmazonKDPSession {
 
 export const IntelligentAssistant: React.FC = () => {
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
   const [currentPrompt, setCurrentPrompt] = useState<BookPrompt | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSteps, setGenerationSteps] = useState<GenerationStep[]>([]);
@@ -95,7 +92,7 @@ export const IntelligentAssistant: React.FC = () => {
   const [showBookView, setShowBookView] = useState(false);
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
   const [selectedBookForDropdown, setSelectedBookForDropdown] = useState<GeneratedBook | null>(null);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  // showUpgradeModal state removed as requested
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
@@ -111,18 +108,14 @@ export const IntelligentAssistant: React.FC = () => {
   // KDP Connection states
   const [amazonKDPSession, setAmazonKDPSession] = useState<AmazonKDPSession>({ isConnected: false });
   const [showKDPCredentialsModal, setShowKDPCredentialsModal] = useState(false);
+  const [isCheckingKDPStatus, setIsCheckingKDPStatus] = useState(false);
   
   // API books state - used in Hot Selling Genres section
   const [apiBooks, setApiBooks] = useState<ApiBook[]>([]);
   const [isLoadingApiBooks, setIsLoadingApiBooks] = useState(false);
   const [apiBooksError, setApiBooksError] = useState<string>('');
 
-  // Check if user needs to upgrade
-  useEffect(() => {
-    if (user?.role === 'guest') {
-      setShowUpgradeModal(true);
-    }
-  }, [user]);
+  // No upgrade modal check - removed as requested
 
   // Check Amazon KDP session status
   useEffect(() => {
@@ -133,43 +126,112 @@ export const IntelligentAssistant: React.FC = () => {
   useEffect(() => {
     if (user) {
       checkAmazonKDPSession();
-    } else {
-      // If user is not logged in, clear KDP session
-      clearKDPSession();
     }
+    // Note: We don't clear KDP session when user logs out
+    // KDP session should persist until explicitly disconnected
   }, [user]);
 
-  const checkAmazonKDPSession = async () => {
+  const checkAmazonKDPSession = async (showLoading = false) => {
+    if (showLoading) {
+      setIsCheckingKDPStatus(true);
+    }
+    
     try {
-      // Check if user has valid Amazon KDP session
+      // First check localStorage for cached session
       const sessionData = localStorage.getItem('amazon_kdp_session');
+      let cachedSession = null;
+      
       if (sessionData) {
-        const session = JSON.parse(sessionData);
-        const now = new Date();
-        const expiresAt = new Date(session.expiresAt);
+        try {
+          cachedSession = JSON.parse(sessionData);
+          const now = new Date();
+          const expiresAt = new Date(cachedSession.expiresAt);
+          
+          // If cached session is expired, clear it
+          if (expiresAt <= now) {
+            localStorage.removeItem('amazon_kdp_session');
+            cachedSession = null;
+          }
+        } catch (parseError) {
+          console.error('Error parsing cached KDP session:', parseError);
+          localStorage.removeItem('amazon_kdp_session');
+          cachedSession = null;
+        }
+      }
+
+      // Call backend API to get current KDP login status
+      try {
+        const response = await AdditionalService.getKdpLoginStatus();
+        const loginStatus = response.data;
+        console.log('KDP Login Status from API:', loginStatus);
         
-        // Check if session is still valid and not expired
-        if (expiresAt > now && session.email && session.isValid !== false) {
+        if (loginStatus?.isConnected && loginStatus?.email) {
+          // KDP is connected according to backend
+          const kdpSession = {
+            isConnected: true,
+            lastConnected: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+            email: loginStatus.email
+          };
+          
+          // Update localStorage with fresh session data
+          localStorage.setItem('amazon_kdp_session', JSON.stringify(kdpSession));
+          
           setAmazonKDPSession({
             isConnected: true,
-            lastConnected: session.lastConnected,
-            expiresAt: session.expiresAt,
-            email: session.email
+            lastConnected: kdpSession.lastConnected,
+            expiresAt: kdpSession.expiresAt,
+            email: kdpSession.email
           });
+          
+          if (showLoading) {
+            toast.success('Amazon KDP connection verified successfully!');
+          }
         } else {
-          // Session expired or invalid, clear it
+          // KDP is not connected according to backend
           localStorage.removeItem('amazon_kdp_session');
           setAmazonKDPSession({ isConnected: false });
+          
+          if (showLoading) {
+            toast.error('Amazon KDP is not connected. Please connect your account.');
+          }
         }
-      } else {
-        // No session data found, ensure disconnected state
-        setAmazonKDPSession({ isConnected: false });
+      } catch (apiError) {
+        console.error('Error checking KDP login status from API:', apiError);
+        
+        // If API call fails, fall back to cached session if available
+        if (cachedSession && cachedSession.isConnected) {
+          setAmazonKDPSession({
+            isConnected: true,
+            lastConnected: cachedSession.lastConnected,
+            expiresAt: cachedSession.expiresAt,
+            email: cachedSession.email
+          });
+          
+          if (showLoading) {
+            toast.warning('Using cached KDP session. Connection status may be outdated.');
+          }
+        } else {
+          setAmazonKDPSession({ isConnected: false });
+          
+          if (showLoading) {
+            toast.error('Failed to check KDP connection status. Please try again.');
+          }
+        }
       }
     } catch (error) {
       console.error('Error checking Amazon KDP session:', error);
       // Clear any corrupted session data
       localStorage.removeItem('amazon_kdp_session');
       setAmazonKDPSession({ isConnected: false });
+      
+      if (showLoading) {
+        toast.error('Error checking KDP connection status.');
+      }
+    } finally {
+      if (showLoading) {
+        setIsCheckingKDPStatus(false);
+      }
     }
   };
 
@@ -479,18 +541,7 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
       return;
     }
 
-    // Check subscription access before generating
-    try {
-      const validation = await subscriptionApi.validateSubscriptionAccess('create_book');
-      if (validation && !validation.can_perform) {
-        setApiError(validation.message || 'You need to upgrade your subscription to create books');
-        setShowUpgradeModal(true);
-        return;
-      }
-    } catch (error) {
-      console.error('Failed to validate subscription access:', error);
-      // Continue with generation if validation fails
-    }
+    // Subscription validation removed as requested
 
     try {
       setApiError('');
@@ -1241,6 +1292,20 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
                 <CheckCircle className="h-3 w-3 mr-1" />
                 Active
               </Badge>
+                <Button
+                  onClick={() => checkAmazonKDPSession(true)}
+                  variant="outline"
+                  size="sm"
+                  disabled={isCheckingKDPStatus}
+                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                >
+                  {isCheckingKDPStatus ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh
+                </Button>
                 <Button
                   onClick={clearKDPSession}
                   variant="outline"
@@ -2332,18 +2397,7 @@ Target Audience: ${currentPrompt?.targetAudience || 'General Audience'}`,
         </div>
       )}
 
-      {/* Checkout Modal */}
-      <CheckoutModal
-        isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
-        onSuccess={() => {
-          setShowUpgradeModal(false);
-          toast.success('Subscription upgraded successfully! You can now create books.');
-        }}
-        requiredFeature="Book Creation"
-        currentPlanId={user?.subscription?.plan || 'free'}
-        triggerSource="intelligent_assistant"
-      />
+      {/* Checkout Modal removed as requested */}
 
       {/* KDP Credentials Modal */}
       <KDPCredentialsModal

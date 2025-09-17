@@ -10,7 +10,7 @@ const apiClient = axios.create({
   withCredentials: false, // Changed to false to avoid CORS issues
   headers: {
     "Content-Type": "application/json",
-    "Accept": "application/json",
+    "Accept": "application/json", 
   },
 });
 
@@ -41,11 +41,7 @@ apiClient.interceptors.request.use(
     config.headers["X-Request-ID"] = requestId;
 
     // Log request in development
-    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-      headers: config.headers,
-      data: config.data,
-      params: config.params,
-    });
+
 
     return config;
   },

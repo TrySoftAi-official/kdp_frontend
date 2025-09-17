@@ -10,6 +10,8 @@ import PaymentService, {
   PaymentRefundRequest,
   PaymentRefundResponse,
   WebhookRetryResponse,
+  CreateBillingPortalSessionRequest,
+  BillingPortalSessionResponse,
 } from '@/api/paymentService';
 import { getErrorMessage } from '@/api/client';
 import { AxiosError } from 'axios';
@@ -36,6 +38,9 @@ interface UsePaymentApiReturn {
   
   // Webhooks
   retryWebhooks: () => Promise<WebhookRetryResponse | null>;
+  
+  // Billing Portal
+  createBillingPortalSession: (data: CreateBillingPortalSessionRequest) => Promise<BillingPortalSessionResponse | null>;
   
   // Utilities
   clearError: () => void;
@@ -165,6 +170,23 @@ export const usePaymentApi = (): UsePaymentApiReturn => {
     }
   }, []);
 
+  // Create billing portal session
+  const createBillingPortalSession = useCallback(async (data: CreateBillingPortalSessionRequest): Promise<BillingPortalSessionResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await PaymentService.createBillingPortalSession(data);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return {
     // State
     isLoading,
@@ -187,6 +209,9 @@ export const usePaymentApi = (): UsePaymentApiReturn => {
     
     // Webhooks
     retryWebhooks,
+    
+    // Billing Portal
+    createBillingPortalSession,
     
     // Utilities
     clearError,

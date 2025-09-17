@@ -1,17 +1,26 @@
 import React from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { XCircle, ArrowLeft, RefreshCw, Home, MessageCircle } from 'lucide-react';
+import { XCircle, ArrowLeft, RefreshCw, Home, MessageCircle, CreditCard, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { SubscriptionPlan } from '@/api/subscriptionService';
 
 export const CheckoutFailure: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   
-  const planId = searchParams.get('plan');
+  // Get data from navigation state
+  const errorData = location.state as {
+    error?: string;
+    plan?: SubscriptionPlan;
+    paymentIntent?: string;
+  };
+  
+  const planId = searchParams.get('plan') || errorData?.plan?.plan_id;
   const source = searchParams.get('source');
 
   const handleRetry = () => {
@@ -48,19 +57,58 @@ export const CheckoutFailure: React.FC = () => {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Plan Information */}
-          {planId && (
+          {/* Error Information */}
+          {errorData?.error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-red-800">Plan</h3>
-                  <p className="text-sm text-red-600 capitalize">
-                    {planId} subscription
-                  </p>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <h3 className="font-semibold text-red-800">Error Details</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-red-600">Error:</span>
+                  <span className="font-semibold text-red-800">{errorData.error}</span>
                 </div>
-                <Badge variant="destructive">
-                  Failed
-                </Badge>
+                {errorData.paymentIntent && (
+                  <div className="flex justify-between">
+                    <span className="text-red-600">Payment ID:</span>
+                    <span className="font-mono text-red-800">{errorData.paymentIntent}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-red-600">Date:</span>
+                  <span className="text-red-800">
+                    {new Date().toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Plan Information */}
+          {(errorData?.plan || planId) && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="h-5 w-5 text-orange-600" />
+                <h3 className="font-semibold text-orange-800">Attempted Purchase</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-orange-600">Plan:</span>
+                  <span className="font-semibold text-orange-800 capitalize">
+                    {errorData?.plan?.name || planId}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-orange-600">Amount:</span>
+                  <span className="font-semibold text-orange-800">
+                    ${Number(errorData?.plan?.price || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-orange-600">Status:</span>
+                  <Badge variant="destructive">Failed</Badge>
+                </div>
               </div>
             </div>
           )}

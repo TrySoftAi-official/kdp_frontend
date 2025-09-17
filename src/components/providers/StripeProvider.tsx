@@ -2,14 +2,18 @@ import React from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { Loader2 } from 'lucide-react';
+import { STRIPE_CONFIG, validateStripeConfig } from '@/config/stripe';
 
-// Stripe publishable key - in production, this should come from environment variables
-const STRIPE_PUBLISHABLE_KEY = (import.meta as any).env?.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51RfxQ1PRGaz648v7jnF8cTZzZ6qJ2pskw2ieTZ4T04HAiiIt2MfX6YgPEEIh5AykawF6ALFYQJkloJyjNIigmFRl00F7f0wOpq';
+// Validate Stripe configuration
+const configValidation = validateStripeConfig();
+if (!configValidation.isValid) {
+  console.error('Stripe configuration errors:', configValidation.errors);
+}
 
-console.log('Stripe publishable key:', STRIPE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
-console.log('Environment variable:', (import.meta as any).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Set' : 'Not set');
+console.log('Stripe publishable key:', STRIPE_CONFIG.publishableKey ? 'Present' : 'Missing');
+console.log('Stripe configuration valid:', configValidation.isValid);
 
-const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
+const stripePromise = loadStripe(STRIPE_CONFIG.publishableKey);
 
 interface StripeProviderProps {
   children: React.ReactNode;
@@ -31,41 +35,7 @@ export const StripeProvider: React.FC<StripeProviderProps> = ({
   
   const stripeOptions = {
     clientSecret,
-    appearance: appearance || {
-      theme: 'stripe',
-      variables: {
-        colorPrimary: '#3b82f6',
-        colorBackground: '#ffffff',
-        colorText: '#1f2937',
-        colorDanger: '#ef4444',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        spacingUnit: '4px',
-        borderRadius: '8px',
-      },
-      rules: {
-        '.Input': {
-          border: '1px solid #d1d5db',
-          borderRadius: '8px',
-          padding: '12px',
-          fontSize: '14px',
-          '&:focus': {
-            borderColor: '#3b82f6',
-            boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)',
-          },
-        },
-        '.Label': {
-          fontSize: '14px',
-          fontWeight: '500',
-          color: '#374151',
-          marginBottom: '6px',
-        },
-        '.Error': {
-          color: '#ef4444',
-          fontSize: '12px',
-          marginTop: '4px',
-        },
-      },
-    },
+    appearance: appearance || STRIPE_CONFIG.appearance,
     ...options,
   };
 

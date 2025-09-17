@@ -36,11 +36,19 @@ const TokenStorage = {
     }
   },
   clear: () => {
+    // Preserve KDP session during token clearing
+    const kdpSession = localStorage.getItem('amazon_kdp_session');
+    
     localStorage.removeItem('access_token');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    
+    // Restore KDP session if it existed
+    if (kdpSession) {
+      localStorage.setItem('amazon_kdp_session', kdpSession);
+    }
   },
   setUser: (u: any) => localStorage.setItem('user', JSON.stringify(u)),
   getUser: () => {
@@ -292,7 +300,14 @@ export const authApi = {
       console.error('Logout API call failed:', logoutError);
       // Continue with logout even if API call fails
     } finally {
+      // Preserve KDP session during logout
+      const kdpSession = localStorage.getItem('amazon_kdp_session');
       TokenStorage.clear();
+      
+      // Restore KDP session if it existed
+      if (kdpSession) {
+        localStorage.setItem('amazon_kdp_session', kdpSession);
+      }
     }
   },
 

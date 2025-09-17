@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ArrowLeft, Settings, Download } from 'lucide-react';
+import { CreditCard, ArrowLeft, Settings, Download, ExternalLink, MessageCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,15 +8,19 @@ import { BillingHistory } from '@/components/subscription/BillingHistory';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { usePaymentApi } from '@/hooks/usePaymentApi';
 import { toast } from '@/lib/toast';
 import { UserSubscriptionWithPlanResponse } from '@/api/subscriptionService';
 
 export const MySubscriptionPage: React.FC = () => {
   const { user } = useAuth();
   const subscriptionApi = useSubscriptionApi();
+  const paymentApi = usePaymentApi();
   
   const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
   const [showPlansModal, setShowPlansModal] = useState(false);
+  const [isLoadingBillingPortal, setIsLoadingBillingPortal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     loadSubscriptionData();
@@ -48,6 +52,18 @@ export const MySubscriptionPage: React.FC = () => {
     }
   };
 
+  const handleRefreshSubscription = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadSubscriptionData();
+      toast.success('Subscription data refreshed successfully!');
+    } catch (error) {
+      toast.error('Failed to refresh subscription data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleUpgrade = () => {
     setShowPlansModal(true);
   };
@@ -63,13 +79,50 @@ export const MySubscriptionPage: React.FC = () => {
     loadSubscriptionData();
   };
 
-  const handleDownloadInvoice = async () => {
-    try {
-      // This would typically open a billing portal or download invoices
-      toast.info('Billing portal feature coming soon');
-    } catch (error) {
-      toast.error('Failed to access billing portal');
+  const handleBillingPortal = async () => {
+    if (!user || !subscriptionData?.subscription?.stripe_customer_id) {
+      toast.error('Customer information not available');
+      return;
     }
+
+    setIsLoadingBillingPortal(true);
+    try {
+      const response = await paymentApi.createBillingPortalSession({
+        customer_id: subscriptionData.subscription.stripe_customer_id,
+        return_url: `${window.location.origin}/subscription`
+      });
+
+      if (response && response.url) {
+        // Redirect to Stripe billing portal
+        window.location.href = response.url;
+      } else {
+        throw new Error('No billing portal URL received');
+      }
+    } catch (error) {
+      console.error('Failed to create billing portal session:', error);
+      toast.error('Failed to access billing portal. Please try again.');
+    } finally {
+      setIsLoadingBillingPortal(false);
+    }
+  };
+
+  const handleContactSupport = () => {
+    // Open support email or redirect to support page
+    const subject = encodeURIComponent('Subscription Support Request');
+    const body = encodeURIComponent(`Hi there,
+
+I need help with my subscription:
+
+User ID: ${user?.id}
+Email: ${user?.email}
+Current Plan: ${subscriptionData?.plan?.name || 'Unknown'}
+
+Please describe your issue here...
+
+Best regards,
+${user?.name || user?.email}`);
+    
+    window.open(`mailto:support@forgekdp.com?subject=${subject}&body=${body}`, '_blank');
   };
 
   if (!user) {
@@ -100,9 +153,39 @@ export const MySubscriptionPage: React.FC = () => {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <Button variant="outline" onClick={handleDownloadInvoice}>
-            <Download className="h-4 w-4 mr-2" />
-            Billing Portal
+          <Button 
+            variant="outline" 
+            onClick={handleRefreshSubscription}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <Settings className="h-4 w-4 mr-2" />
+                Refresh
+              </>
+            )}
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleBillingPortal}
+            disabled={isLoadingBillingPortal || !subscriptionData?.subscription?.stripe_customer_id}
+          >
+            {isLoadingBillingPortal ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Billing Portal
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -144,9 +227,14 @@ export const MySubscriptionPage: React.FC = () => {
                 <Button 
                   variant="outline" 
                   className="h-auto p-4 flex flex-col items-center gap-2"
-                  onClick={handleDownloadInvoice}
+                  onClick={handleBillingPortal}
+                  disabled={isLoadingBillingPortal || !subscriptionData?.subscription?.stripe_customer_id}
                 >
-                  <Download className="h-6 w-6" />
+                  {isLoadingBillingPortal ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-6 w-6" />
+                  )}
                   <span className="font-medium">Billing Portal</span>
                   <span className="text-xs text-muted-foreground">Manage payments</span>
                 </Button>
@@ -154,9 +242,9 @@ export const MySubscriptionPage: React.FC = () => {
                 <Button 
                   variant="outline" 
                   className="h-auto p-4 flex flex-col items-center gap-2"
-                  onClick={() => window.open('/support', '_blank')}
+                  onClick={handleContactSupport}
                 >
-                  <Settings className="h-6 w-6" />
+                  <MessageCircle className="h-6 w-6" />
                   <span className="font-medium">Support</span>
                   <span className="text-xs text-muted-foreground">Get help</span>
                 </Button>
@@ -180,16 +268,37 @@ export const MySubscriptionPage: React.FC = () => {
                 <p className="mt-2">
                   For billing inquiries or subscription changes, please contact our support team.
                 </p>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-blue-800 text-sm">
+                    <strong>Note:</strong> If you just completed a payment but don't see your subscription updated, 
+                    try clicking the "Refresh" button above or wait a few minutes for the system to sync.
+                  </p>
+                </div>
               </div>
               
               <div className="flex flex-wrap gap-3">
                 <Button variant="outline" onClick={handleUpgrade}>
                   Change Plan
                 </Button>
-                <Button variant="outline" onClick={handleDownloadInvoice}>
-                  Billing Portal
+                <Button 
+                  variant="outline" 
+                  onClick={handleBillingPortal}
+                  disabled={isLoadingBillingPortal || !subscriptionData?.subscription?.stripe_customer_id}
+                >
+                  {isLoadingBillingPortal ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Billing Portal
+                    </>
+                  )}
                 </Button>
-                <Button variant="outline" onClick={() => window.open('/support', '_blank')}>
+                <Button variant="outline" onClick={handleContactSupport}>
+                  <MessageCircle className="h-4 w-4 mr-2" />
                   Contact Support
                 </Button>
               </div>
@@ -206,7 +315,6 @@ export const MySubscriptionPage: React.FC = () => {
           setShowPlansModal(false);
           loadSubscriptionData();
         }}
-        currentPlanId={subscriptionData?.subscription?.plan?.plan_id}
         triggerSource="my_subscription"
       />
     </div>

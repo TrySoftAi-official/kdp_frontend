@@ -504,7 +504,6 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
           loadSubscriptionData();
           onSubscriptionChange?.();
         }}
-        currentPlanId={subscriptionData?.subscription?.plan?.plan_id}
         triggerSource="subscription_manager"
       />
 

@@ -128,11 +128,8 @@ export const PaymentFlowTest: React.FC = () => {
             isOpen={showUpgradeFlow}
             onClose={() => setShowUpgradeFlow(false)}
             onSuccess={handleUpgradeSuccess}
-            currentPlanId="free"
             requiredFeature="Payment Flow Test"
             triggerSource="payment_test"
-            restrictedFeature="Payment Flow Test"
-            featureDescription="Test the complete payment flow with Stripe integration."
           />
         )}
       </div>

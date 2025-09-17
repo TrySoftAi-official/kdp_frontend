@@ -11,7 +11,8 @@ import {
   ChevronRight,
   TrendingUp,
   Shield,
-  Zap
+  Zap,
+  CreditCard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -50,7 +51,6 @@ const navItems: NavItem[] = [
     description: 'Intelligent book generation',
     badge: 'AI'
   },
- 
   {
     label: 'My Books',
     href: '/books',
@@ -58,17 +58,23 @@ const navItems: NavItem[] = [
     description: 'Manage your library'
   },
   {
+    label: 'Publish',
+    href: '/publish',
+    icon: Megaphone,
+    description: 'Launch your books'
+  },
+  {
+    label: 'Subscription',
+    href: '/subscription',
+    icon: CreditCard,
+    description: 'Manage your plan'
+  },
+  {
     label: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
     roles: ['admin', 'marketer'],
     description: 'Performance metrics'
-  },
-  {
-    label: 'Publish',
-    href: '/publish',
-    icon: Megaphone,
-    description: 'Launch your books'
   },
   {
     label: 'Account',
@@ -224,7 +230,7 @@ export const Sidebar: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{user.name || user.username || user.email}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{user.name || user.email}</p>
                     <div className="flex items-center gap-1 mt-1">
                       {getRoleIcon(user.role)}
                       <Badge 
@@ -348,7 +354,7 @@ export const Sidebar: React.FC = () => {
                 <div className="flex items-center justify-center">
                   <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                     <span className="text-sm font-semibold text-white">
-                      {(user.name || user?.username || user.email || 'U').charAt(0).toUpperCase()}
+                      {(user.name || user.email || 'U').charAt(0).toUpperCase()}
                     </span>
                   </div>
                 </div>

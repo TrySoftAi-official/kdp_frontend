@@ -146,7 +146,6 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         requiredFeature={feature.charAt(0).toUpperCase() + feature.slice(1).replace('_', ' ')}
-        currentPlanId={currentPlan.id}
         triggerSource="feature_gate"
       />
     </>
@@ -260,7 +259,6 @@ export const UsageGate: React.FC<UsageGateProps> = ({
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
         requiredFeature={`More ${usageType.replace('_', ' ')}`}
-        currentPlanId={currentPlan.id}
         triggerSource="usage_gate"
       />
     </>

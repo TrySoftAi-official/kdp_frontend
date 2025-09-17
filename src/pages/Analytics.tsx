@@ -189,7 +189,6 @@ export const Analytics: React.FC = () => {
           toast.success('Subscription upgraded successfully! You can now access analytics.');
         }}
         requiredFeature="Analytics & Performance Metrics"
-        currentPlanId={user?.subscription?.plan || 'free'}
         triggerSource="analytics_access"
       />
     </RoleBased>

@@ -199,11 +199,19 @@ export class AuthService {
   }
 
   static clearTokens(): void {
+    // Preserve KDP session during token clearing
+    const kdpSession = localStorage.getItem('amazon_kdp_session');
+    
     localStorage.removeItem('access_token');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    
+    // Restore KDP session if it existed
+    if (kdpSession) {
+      localStorage.setItem('amazon_kdp_session', kdpSession);
+    }
   }
 
   static storeUser(user: UserResponse): void {

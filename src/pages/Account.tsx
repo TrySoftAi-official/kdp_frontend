@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Settings, CreditCard, Bell, Shield, HelpCircle, Loader2, ExternalLink } from 'lucide-react';
+import { User, Settings, Bell, Shield, HelpCircle, Loader2, Upload, CheckCircle, XCircle, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,22 +7,18 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserApi } from '@/hooks/useUserApi';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { ROLES, SUBSCRIPTION_PLANS } from '@/lib/constants';
+import { ROLES } from '@/lib/constants';
 import { toast } from '@/lib/toast';
-import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { BillingHistory } from '@/components/subscription/BillingHistory';
-import { SubscriptionStatusWidget } from '@/components/subscription/SubscriptionStatusWidget';
+import { getAccountStatus, AccountStatus } from '@/api/additionalService';
 
 export const Account: React.FC = () => {
   const { user, refreshUserData } = useAuth();
   const userApi = useUserApi();
-  const subscriptionApi = useSubscriptionApi();
 
   console.log("its My User : ",user);
   // Form states
   const [profileForm, setProfileForm] = useState({
-    firstName:user?.username || '',
+    firstName: user?.name?.split(' ')[0] || '',
     lastName: '',
     email: ''
   });
@@ -43,11 +39,9 @@ export const Account: React.FC = () => {
     currency: 'USD ($)'
   });
 
-  const [subscription, setSubscription] = useState<any>(null);
-  const [userStats, setUserStats] = useState<any>(null);
+  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
+  const [accountStatusLoading, setAccountStatusLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showPlansModal, setShowPlansModal] = useState(false);
-  const [showBillingHistory, setShowBillingHistory] = useState(false);
 
   // Load user data on component mount
   useEffect(() => {
@@ -70,14 +64,14 @@ export const Account: React.FC = () => {
 
   const loadUserData = async () => {
     try {
-      const [subscriptionData, statsData, preferencesData] = await Promise.all([
-        userApi.getSubscription(),
-        userApi.getUserStats(),
-        userApi.getUserPreferences()
+      const [preferencesData, accountStatusData] = await Promise.all([
+        userApi.getUserPreferences(),
+        getAccountStatus().catch(error => {
+          console.error('Failed to fetch account status:', error);
+          return null;
+        })
       ]);
 
-      if (subscriptionData) setSubscription(subscriptionData);
-      if (statsData) setUserStats(statsData);
       if (preferencesData) {
         setPreferences(prev => ({
           ...prev,
@@ -87,8 +81,13 @@ export const Account: React.FC = () => {
           timezone: preferencesData.timezone
         }));
       }
+      if (accountStatusData?.data) {
+        setAccountStatus(accountStatusData.data);
+      }
     } catch (error) {
       console.error('Failed to load user data:', error);
+    } finally {
+      setAccountStatusLoading(false);
     }
   };
 
@@ -177,22 +176,6 @@ export const Account: React.FC = () => {
     }
   };
 
-  const handleSubscriptionUpgrade = async (planId: string) => {
-    setIsUpdating(true);
-    try {
-      const updatedSubscription = await userApi.updateSubscription(planId);
-      if (updatedSubscription) {
-        toast.success('Subscription updated successfully');
-        setSubscription(updatedSubscription);
-      } else {
-        toast.error(userApi.error || 'Failed to update subscription');
-      }
-    } catch (error) {
-      toast.error('Failed to update subscription');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   // Show loading state if user data is not available yet
   if (!user) {
@@ -298,6 +281,110 @@ export const Account: React.FC = () => {
                   'Save Changes'
                 )}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Account Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Account Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {accountStatusLoading ? (
+                <div className="space-y-4">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                </div>
+              ) : accountStatus ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Email</label>
+                      <p className="text-sm text-gray-900">{accountStatus.email}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Account Status</label>
+                      <div className="flex items-center gap-2">
+                        {accountStatus.is_active ? (
+                          <span className="flex items-center gap-1 text-green-600 text-sm">
+                            <CheckCircle className="h-4 w-4" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-red-600 text-sm">
+                            <XCircle className="h-4 w-4" />
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Uploads Count</label>
+                      <p className="text-sm text-gray-900">{accountStatus.uploads_count}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Max Uploads</label>
+                      <p className="text-sm text-gray-900">{accountStatus.max_uploads}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Remaining Uploads</label>
+                      <p className="text-sm text-gray-900">{accountStatus.remaining_uploads}</p>
+                    </div>
+                  </div>
+
+                  {accountStatus.last_upload_date && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Last Upload Date</label>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <p className="text-sm text-gray-900">
+                          {new Date(accountStatus.last_upload_date).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Upload Permission</label>
+                      <div className="flex items-center gap-2">
+                        {accountStatus.can_upload ? (
+                          <span className="flex items-center gap-1 text-green-600 text-sm">
+                            <Upload className="h-4 w-4" />
+                            Can Upload
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-red-600 text-sm">
+                            <XCircle className="h-4 w-4" />
+                            Upload Disabled
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Status Message</label>
+                      <p className="text-sm text-gray-900">{accountStatus.status_message}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p>Failed to load account status</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -451,12 +538,6 @@ export const Account: React.FC = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <SubscriptionStatusWidget 
-            showUpgradeButton={true}
-            showUsageDetails={true}
-            compact={false}
-            onUpgrade={() => setShowPlansModal(true)}
-          />
 
           <Card>
             <CardHeader>
@@ -534,17 +615,6 @@ export const Account: React.FC = () => {
         </div>
       </div>
 
-      {/* Subscription Plans Modal */}
-      <CheckoutModal
-        isOpen={showPlansModal}
-        onClose={() => setShowPlansModal(false)}
-        onSuccess={() => {
-          setShowPlansModal(false);
-          loadUserData();
-        }}
-        currentPlanId={subscription?.plan}
-        triggerSource="account"
-      />
     </div>
   );
 };

@@ -1,22 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, ArrowRight, Home, RefreshCw } from 'lucide-react';
+import { CheckCircle, ArrowRight, Home, RefreshCw, CreditCard, Calendar, DollarSign } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
 import { toast } from '@/lib/toast';
+import { SubscriptionPlan } from '@/api/subscriptionService';
 
 export const CheckoutSuccess: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const subscriptionApi = useSubscriptionApi();
   
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   
-  const planId = searchParams.get('plan');
+  // Get data from navigation state
+  const paymentData = location.state as {
+    paymentIntent?: any;
+    plan?: SubscriptionPlan;
+    amount?: number;
+  };
+  
+  const planId = searchParams.get('plan') || paymentData?.plan?.plan_id;
   const source = searchParams.get('source');
 
   useEffect(() => {
@@ -29,8 +39,11 @@ export const CheckoutSuccess: React.FC = () => {
     
     setIsRefreshing(true);
     try {
-      // Refresh subscription data
-      await subscriptionApi.getMySubscriptionStatus();
+      // Get current subscription data
+      const subscription = await subscriptionApi.getMySubscription();
+      if (subscription) {
+        setCurrentSubscription(subscription);
+      }
       toast.success('Subscription status updated successfully!');
     } catch (error) {
       console.error('Failed to refresh subscription status:', error);
@@ -70,32 +83,114 @@ export const CheckoutSuccess: React.FC = () => {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Plan Information */}
-          {planId && (
+          {/* Payment Information */}
+          {paymentData?.paymentIntent && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-green-800">New Plan</h3>
-                  <p className="text-sm text-green-600 capitalize">
-                    {planId} subscription activated
-                  </p>
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="h-5 w-5 text-green-600" />
+                <h3 className="font-semibold text-green-800">Payment Details</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-green-600">Payment ID:</span>
+                  <span className="font-mono text-green-800">{paymentData.paymentIntent.id}</span>
                 </div>
-                <Badge className="bg-green-600 text-white">
-                  Active
-                </Badge>
+                <div className="flex justify-between">
+                  <span className="text-green-600">Amount:</span>
+                  <span className="font-semibold text-green-800">
+                    ${Number(paymentData.amount || paymentData.plan?.price || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-600">Status:</span>
+                  <Badge className="bg-green-600 text-white">Paid</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-600">Date:</span>
+                  <span className="text-green-800">
+                    {new Date().toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Plan Information */}
+          {(paymentData?.plan || planId) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                <h3 className="font-semibold text-blue-800">Subscription Plan</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-600">Plan:</span>
+                  <span className="font-semibold text-blue-800 capitalize">
+                    {paymentData?.plan?.name || planId}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-600">Billing:</span>
+                  <span className="text-blue-800 capitalize">
+                    {paymentData?.plan?.billing_cycle || 'monthly'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-600">Status:</span>
+                  <Badge className="bg-blue-600 text-white">Active</Badge>
+                </div>
+                {paymentData?.plan?.description && (
+                  <div className="mt-2 pt-2 border-t border-blue-200">
+                    <p className="text-blue-600 text-xs">
+                      {paymentData.plan.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Current Subscription Details */}
+          {currentSubscription && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign className="h-5 w-5 text-purple-600" />
+                <h3 className="font-semibold text-purple-800">Current Subscription</h3>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-purple-600">Plan:</span>
+                  <span className="font-semibold text-purple-800">
+                    {currentSubscription.plan?.name || 'Unknown'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-purple-600">Status:</span>
+                  <Badge className="bg-purple-600 text-white">
+                    {currentSubscription.status || 'Active'}
+                  </Badge>
+                </div>
+                {currentSubscription.current_period_end && (
+                  <div className="flex justify-between">
+                    <span className="text-purple-600">Next Billing:</span>
+                    <span className="text-purple-800">
+                      {new Date(currentSubscription.current_period_end).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* User Information */}
           {user && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-semibold text-blue-800 mb-2">Account Details</h3>
-              <p className="text-sm text-blue-600">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <h3 className="font-semibold text-gray-800 mb-2">Account Details</h3>
+              <p className="text-sm text-gray-600">
                 <strong>Email:</strong> {user.email}
               </p>
               {user.name && (
-                <p className="text-sm text-blue-600">
+                <p className="text-sm text-gray-600">
                   <strong>Name:</strong> {user.name}
                 </p>
               )}

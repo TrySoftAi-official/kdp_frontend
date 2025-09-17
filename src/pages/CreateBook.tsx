@@ -1697,7 +1697,6 @@ Remember: Small changes add up to big results over time. Your future self will t
            toast.success('Subscription upgraded successfully! You can now create books.');
          }}
          requiredFeature="Book Creation"
-         currentPlanId={user?.subscription?.plan || 'free'}
          triggerSource="book_creation"
        />
      </div>
