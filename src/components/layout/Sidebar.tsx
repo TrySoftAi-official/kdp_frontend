@@ -12,7 +12,8 @@ import {
   TrendingUp,
   Shield,
   Zap,
-  CreditCard
+  CreditCard,
+  Target
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,6 +63,13 @@ const navItems: NavItem[] = [
     href: '/publish',
     icon: Megaphone,
     description: 'Launch your books'
+  },
+  {
+    label: 'Ad Campaigns',
+    href: '/ad-campaigns',
+    icon: Target,
+    description: 'Manage advertising campaigns',
+    badge: 'New'
   },
   {
     label: 'Subscription',

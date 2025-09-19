@@ -817,6 +817,31 @@
     static async getAllAccounts(): Promise<AxiosResponse<AllAccountsResponse>> {
       return additionalServiceClient.get('/all-accounts');
     }
+
+    // Royalty Methods
+    static async getRoyalties(email: string): Promise<AxiosResponse<RoyaltySummaryData[]>> {
+      const response = await additionalServiceClient.get(`/royalties/${encodeURIComponent(email)}`);
+      
+      // Transform response to our expected format
+      const transformedResponse = {
+        ...response,
+        data: Array.isArray(response.data) ? response.data : []
+      };
+      
+      return transformedResponse;
+    }
+
+    static async getRoyaltiesPerBook(email: string): Promise<AxiosResponse<RoyaltyData[]>> {
+      const response = await additionalServiceClient.get(`/royalties-per-book/${encodeURIComponent(email)}`);
+      
+      // Transform response to our expected format
+      const transformedResponse = {
+        ...response,
+        data: Array.isArray(response.data) ? response.data : []
+      };
+      
+      return transformedResponse;
+    }
   }
 
   // Account Status Types
@@ -833,6 +858,38 @@
 
   export interface AllAccountsResponse {
     accounts: AccountStatus[];
+    total: number;
+  }
+
+  // Royalty Types
+  export interface RoyaltyData {
+    id: number;
+    timestamp: string;
+    book_title: string;
+    ebook_royalties: string;
+    print_royalties: string;
+    kenp_royalties: string;
+    total_royalties: string;
+    total_royalties_usd: string;
+    email: string;
+  }
+
+  export interface RoyaltySummaryData {
+    id: number;
+    timestamp: string;
+    email: string;
+    total_orders: string;
+    number_of_books: string;
+    revenue: string;
+  }
+
+  export interface RoyaltiesResponse {
+    royalties: RoyaltyData[];
+    total: number;
+  }
+
+  export interface RoyaltiesPerBookResponse {
+    royalties: RoyaltyData[];
     total: number;
   }
 
@@ -860,6 +917,8 @@
     viewCover,
     getAccountStatus,
     getAllAccounts,
+    getRoyalties,
+    getRoyaltiesPerBook,
     formatUploadProgress,
     getUploadStatusColor,
     getQueueStatusColor,

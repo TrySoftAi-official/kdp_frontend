@@ -1,7 +1,7 @@
 import axios, { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from "axios";
 
 // Base URL for backend - can be overridden by environment variables
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
 
 // Create axios instance with enhanced configuration
 const apiClient = axios.create({
@@ -41,6 +41,12 @@ apiClient.interceptors.request.use(
     config.headers["X-Request-ID"] = requestId;
 
     // Log request in development
+    if (import.meta.env.DEV) {
+      console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+        headers: config.headers,
+        data: config.data
+      });
+    }
 
 
     return config;

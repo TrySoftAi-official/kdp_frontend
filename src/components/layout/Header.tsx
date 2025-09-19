@@ -37,7 +37,6 @@ export const Header: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  console.log("its My User : ",user);
   const unreadCount = notifications.filter(n => !n.read).length;
 
 

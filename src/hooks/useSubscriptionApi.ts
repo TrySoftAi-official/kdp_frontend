@@ -4,12 +4,26 @@ import SubscriptionService, {
   SubscriptionPlan,
   UserSubscription,
   SubscriptionStatus,
+  SubscriptionCreateRequest,
+  SubscriptionCreateResponse,
   SubscriptionUpgradeRequest,
   SubscriptionCancelRequest,
   SubscriptionUsageCheckRequest,
   SubscriptionUsageCheckResponse,
   SubscriptionBilling,
   UserSubscriptionWithPlanResponse,
+  EnhancedSubscriptionStatus,
+  PermissionCheckRequest,
+  PermissionCheckResponse,
+  UsageLimitRequest,
+  UsageLimitResponse,
+  OrganizationCreateRequest,
+  OrganizationResponse,
+  SubUserResponse,
+  SubUserInviteRequest,
+  SubUserInviteResponse,
+  SubUserRoleUpdateRequest,
+  CheckAccessResponse,
 } from '@/api/subscriptionService';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -23,6 +37,7 @@ export interface UseSubscriptionApiReturn {
   
   // User Subscription
   getMySubscription: () => Promise<UserSubscriptionWithPlanResponse | null>;
+  createSubscription: (data: SubscriptionCreateRequest) => Promise<SubscriptionCreateResponse | null>;
   getMySubscriptionStatus: () => Promise<SubscriptionStatus | null>;
   upgradeSubscription: (data: SubscriptionUpgradeRequest) => Promise<UserSubscription | null>;
   cancelSubscription: (data: SubscriptionCancelRequest) => Promise<UserSubscription | null>;
@@ -34,9 +49,27 @@ export interface UseSubscriptionApiReturn {
   
   // Validation
   validateSubscriptionAccess: (action: string) => Promise<{ can_perform: boolean; message: string } | null>;
+  checkAccess: (action: string) => Promise<CheckAccessResponse | null>;
   
   // Billing
   getBillingHistory: (limit?: number) => Promise<SubscriptionBilling[] | null>;
+  
+  // Stripe Sync
+  syncMySubscription: () => Promise<{ success: boolean; message: string; subscription_id?: number; status?: string } | null>;
+  getSyncStatus: () => Promise<{ total_users: number; users_with_subscriptions: number; subscription_status_breakdown: Record<string, number>; sync_needed: boolean } | null>;
+  
+  // Enhanced Subscription
+  getEnhancedSubscriptionStatus: () => Promise<EnhancedSubscriptionStatus | null>;
+  checkPermission: (data: PermissionCheckRequest) => Promise<PermissionCheckResponse | null>;
+  checkUsageLimit: (data: UsageLimitRequest) => Promise<UsageLimitResponse | null>;
+  
+  // Organization Management
+  createOrganization: (data: OrganizationCreateRequest) => Promise<OrganizationResponse | null>;
+  getMyOrganization: () => Promise<OrganizationResponse | null>;
+  getOrganizationUsers: () => Promise<SubUserResponse[] | null>;
+  inviteSubUser: (data: SubUserInviteRequest) => Promise<SubUserInviteResponse | null>;
+  updateSubUserRole: (userId: number, data: SubUserRoleUpdateRequest) => Promise<SubUserResponse | null>;
+  removeSubUser: (userId: number) => Promise<boolean>;
   
   // Helper methods
   isSubscriptionActive: (subscription?: UserSubscription) => boolean;
@@ -130,6 +163,34 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
       setIsLoading(false);
     }
   }, [cache, CACHE_DURATION]);
+
+  const createSubscription = useCallback(async (data: SubscriptionCreateRequest): Promise<SubscriptionCreateResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log('🔄 API: Creating subscription with data:', data);
+      const response = await SubscriptionService.createSubscription(data);
+      console.log('📋 API: Subscription creation response:', response);
+      console.log('📋 API: Response data:', response.data);
+      return response.data;
+    } catch (err) {
+      console.error('❌ API: Subscription creation error:', err);
+      if (err instanceof AxiosError) {
+        console.error('❌ API: Axios error details:', {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          message: err.message
+        });
+      }
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const getMySubscriptionStatus = useCallback(async (): Promise<SubscriptionStatus | null> => {
     setIsLoading(true);
@@ -248,6 +309,22 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
     }
   }, []);
 
+  const checkAccess = useCallback(async (action: string): Promise<CheckAccessResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.checkAccess(action);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Billing
   const getBillingHistory = useCallback(async (limit: number = 10): Promise<SubscriptionBilling[] | null> => {
     setIsLoading(true);
@@ -260,6 +337,185 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
       const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
       setError(errorMessage);
       return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Stripe Sync
+  const syncMySubscription = useCallback(async (): Promise<{ success: boolean; message: string; subscription_id?: number; status?: string } | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.syncMySubscription();
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const getSyncStatus = useCallback(async (): Promise<{ total_users: number; users_with_subscriptions: number; subscription_status_breakdown: Record<string, number>; sync_needed: boolean } | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.getSyncStatus();
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Enhanced Subscription
+  const getEnhancedSubscriptionStatus = useCallback(async (): Promise<EnhancedSubscriptionStatus | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.getEnhancedSubscriptionStatus();
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const checkPermission = useCallback(async (data: PermissionCheckRequest): Promise<PermissionCheckResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.checkPermission(data);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const checkUsageLimit = useCallback(async (data: UsageLimitRequest): Promise<UsageLimitResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.checkUsageLimit(data);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Organization Management
+  const createOrganization = useCallback(async (data: OrganizationCreateRequest): Promise<OrganizationResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.createOrganization(data);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const getMyOrganization = useCallback(async (): Promise<OrganizationResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.getMyOrganization();
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const getOrganizationUsers = useCallback(async (): Promise<SubUserResponse[] | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.getOrganizationUsers();
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const inviteSubUser = useCallback(async (data: SubUserInviteRequest): Promise<SubUserInviteResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.inviteSubUser(data);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const updateSubUserRole = useCallback(async (userId: number, data: SubUserRoleUpdateRequest): Promise<SubUserResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await SubscriptionService.updateSubUserRole(userId, data);
+      return response.data;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const removeSubUser = useCallback(async (userId: number): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await SubscriptionService.removeSubUser(userId);
+      return true;
+    } catch (err) {
+      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      setError(errorMessage);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -340,6 +596,7 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
     
     // User Subscription
     getMySubscription,
+    createSubscription,
     getMySubscriptionStatus,
     upgradeSubscription,
     cancelSubscription,
@@ -351,9 +608,27 @@ export const useSubscriptionApi = (): UseSubscriptionApiReturn => {
     
     // Validation
     validateSubscriptionAccess,
+    checkAccess,
     
     // Billing
     getBillingHistory,
+    
+    // Stripe Sync
+    syncMySubscription,
+    getSyncStatus,
+    
+    // Enhanced Subscription
+    getEnhancedSubscriptionStatus,
+    checkPermission,
+    checkUsageLimit,
+    
+    // Organization Management
+    createOrganization,
+    getMyOrganization,
+    getOrganizationUsers,
+    inviteSubUser,
+    updateSubUserRole,
+    removeSubUser,
     
     // Helper methods
     isSubscriptionActive,

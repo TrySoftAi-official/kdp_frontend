@@ -1,266 +1,270 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { CheckCircle, ArrowRight, Home, RefreshCw, CreditCard, Calendar, DollarSign } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { toast } from '@/lib/toast';
-import { SubscriptionPlan } from '@/api/subscriptionService';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { toast } from '../lib/toast';
+import { SubscriptionService } from '../api/subscriptionService';
 
-export const CheckoutSuccess: React.FC = () => {
+const CheckoutSuccess: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
-  
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
-  
-  // Get data from navigation state
-  const paymentData = location.state as {
-    paymentIntent?: any;
-    plan?: SubscriptionPlan;
-    amount?: number;
-  };
-  
-  const planId = searchParams.get('plan') || paymentData?.plan?.plan_id;
-  const source = searchParams.get('source');
+  const [loading, setLoading] = useState(true);
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
+  const [syncingSubscription, setSyncingSubscription] = useState(false);
 
   useEffect(() => {
-    // Refresh subscription status after successful payment
-    refreshSubscriptionStatus();
-  }, []);
+    const plan = searchParams.get('plan');
+    const billing = searchParams.get('billing');
+    const amount = searchParams.get('amount');
+    const source = searchParams.get('source');
 
-  const refreshSubscriptionStatus = async () => {
-    if (!user) return;
-    
-    setIsRefreshing(true);
+    if (plan && billing && amount) {
+      setSubscriptionData({
+        plan,
+        billing,
+        amount: parseFloat(amount),
+        source
+      });
+    }
+
+    // Auto-sync subscription data from Stripe
+    if (source === 'subscription') {
+      syncSubscriptionFromStripe();
+    }
+
+    setLoading(false);
+  }, [searchParams]);
+
+  const syncSubscriptionFromStripe = async () => {
     try {
-      // Get current subscription data
-      const subscription = await subscriptionApi.getMySubscription();
-      if (subscription) {
-        setCurrentSubscription(subscription);
+      setSyncingSubscription(true);
+      
+      // Wait a moment for Stripe webhook to process
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // First try to create subscription from payment
+      const createResponse = await fetch('/api/subscription/create-subscription-from-payment', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (createResponse.ok) {
+        const data = await createResponse.json();
+        if (data.success) {
+          console.log('Subscription created successfully:', data);
+          return;
+        }
       }
-      toast.success('Subscription status updated successfully!');
+      
+      // If that fails, try to fetch and save from Stripe
+      const response = await fetch('/api/subscription/fetch-and-save-stripe-subscription', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log('Subscription synced successfully:', data);
+        } else {
+          console.warn('Subscription sync failed:', data.message);
+        }
+      }
     } catch (error) {
-      console.error('Failed to refresh subscription status:', error);
-      toast.error('Failed to refresh subscription status');
+      console.error('Error syncing subscription:', error);
     } finally {
-      setIsRefreshing(false);
+      setSyncingSubscription(false);
     }
   };
 
-  const handleContinue = () => {
-    // Navigate based on source or default to dashboard
-    switch (source) {
-      case 'plan_upgrade':
-        navigate('/dashboard');
-        break;
-      case 'subscription_manager':
-        navigate('/subscription');
-        break;
-      default:
-        navigate('/dashboard');
+  const handleGoToSubscription = () => {
+    navigate('/subscription');
+  };
+
+  const handleDownloadReceipt = async () => {
+    try {
+      // Get the latest invoice from Stripe
+      const response = await fetch('/api/subscription/billing/invoices?limit=1', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const invoices = await response.json();
+        if (invoices.length > 0 && invoices[0].invoice_pdf) {
+          window.open(invoices[0].invoice_pdf, '_blank');
+        } else {
+          toast.info('Receipt will be available shortly');
+        }
+      } else {
+        toast.info('Receipt will be available shortly');
+      }
+    } catch (error) {
+      console.error('Error downloading receipt:', error);
+      toast.info('Receipt will be available shortly');
     }
   };
+
+  const handleManageBilling = async () => {
+    try {
+      const response = await fetch('/api/subscription/billing/portal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        window.open(data.portal_url, '_blank');
+      } else {
+        toast.error('Failed to open billing portal');
+      }
+    } catch (error) {
+      console.error('Error opening billing portal:', error);
+      toast.error('Failed to open billing portal');
+    }
+  };
+
+  const getPlanDisplayName = (planId: string) => {
+    const planNames = {
+      free: 'Free',
+      basic: 'Basic',
+      pro: 'Pro',
+      enterprise: 'Enterprise'
+    };
+    return planNames[planId as keyof typeof planNames] || planId;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading payment details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-            <CheckCircle className="h-8 w-8 text-green-600" />
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-2xl mx-auto px-4 py-16">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          {/* Success Icon */}
+          <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
+            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
           </div>
-          <CardTitle className="text-2xl font-bold text-green-800">
+
+          {/* Success Message */}
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
             Payment Successful!
-          </CardTitle>
-          <CardDescription className="text-lg text-gray-600">
+          </h1>
+          <p className="text-lg text-gray-600 mb-8">
             Your subscription has been activated successfully
-          </CardDescription>
-        </CardHeader>
+          </p>
 
-        <CardContent className="space-y-6">
-          {/* Payment Information */}
-          {paymentData?.paymentIntent && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CreditCard className="h-5 w-5 text-green-600" />
-                <h3 className="font-semibold text-green-800">Payment Details</h3>
+          {/* Syncing Indicator */}
+          {syncingSubscription && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+                <span className="text-blue-800">Syncing subscription data...</span>
               </div>
-              <div className="space-y-2 text-sm">
+            </div>
+          )}
+
+          {/* Subscription Details */}
+          {subscriptionData && (
+            <div className="bg-gray-50 rounded-lg p-6 mb-8 text-left">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Subscription Details:
+              </h2>
+              <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-green-600">Payment ID:</span>
-                  <span className="font-mono text-green-800">{paymentData.paymentIntent.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-green-600">Amount:</span>
-                  <span className="font-semibold text-green-800">
-                    ${Number(paymentData.amount || paymentData.plan?.price || 0).toFixed(2)}
+                  <span className="text-gray-600">Plan:</span>
+                  <span className="font-medium text-gray-900">
+                    {getPlanDisplayName(subscriptionData.plan)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-green-600">Status:</span>
-                  <Badge className="bg-green-600 text-white">Paid</Badge>
+                  <span className="text-gray-600">Billing Cycle:</span>
+                  <span className="font-medium text-gray-900 capitalize">
+                    {subscriptionData.billing}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-green-600">Date:</span>
-                  <span className="text-green-800">
-                    {new Date().toLocaleDateString()}
+                  <span className="text-gray-600">Amount:</span>
+                  <span className="font-medium text-gray-900">
+                    ${subscriptionData.amount.toFixed(2)}
                   </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Status:</span>
+                  <span className="font-medium text-green-600">Active</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Plan Information */}
-          {(paymentData?.plan || planId) && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar className="h-5 w-5 text-blue-600" />
-                <h3 className="font-semibold text-blue-800">Subscription Plan</h3>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-blue-600">Plan:</span>
-                  <span className="font-semibold text-blue-800 capitalize">
-                    {paymentData?.plan?.name || planId}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-600">Billing:</span>
-                  <span className="text-blue-800 capitalize">
-                    {paymentData?.plan?.billing_cycle || 'monthly'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-600">Status:</span>
-                  <Badge className="bg-blue-600 text-white">Active</Badge>
-                </div>
-                {paymentData?.plan?.description && (
-                  <div className="mt-2 pt-2 border-t border-blue-200">
-                    <p className="text-blue-600 text-xs">
-                      {paymentData.plan.description}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Current Subscription Details */}
-          {currentSubscription && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <DollarSign className="h-5 w-5 text-purple-600" />
-                <h3 className="font-semibold text-purple-800">Current Subscription</h3>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-purple-600">Plan:</span>
-                  <span className="font-semibold text-purple-800">
-                    {currentSubscription.plan?.name || 'Unknown'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-purple-600">Status:</span>
-                  <Badge className="bg-purple-600 text-white">
-                    {currentSubscription.status || 'Active'}
-                  </Badge>
-                </div>
-                {currentSubscription.current_period_end && (
-                  <div className="flex justify-between">
-                    <span className="text-purple-600">Next Billing:</span>
-                    <span className="text-purple-800">
-                      {new Date(currentSubscription.current_period_end).toLocaleDateString()}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* User Information */}
-          {user && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-800 mb-2">Account Details</h3>
-              <p className="text-sm text-gray-600">
-                <strong>Email:</strong> {user.email}
-              </p>
-              {user.name && (
-                <p className="text-sm text-gray-600">
-                  <strong>Name:</strong> {user.name}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Next Steps */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-800 mb-2">What's Next?</h3>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>• Your subscription is now active</li>
-              <li>• You can access all premium features</li>
-              <li>• Check your email for confirmation</li>
-              <li>• Manage your subscription anytime</li>
+          {/* What's Next */}
+          <div className="bg-blue-50 rounded-lg p-6 mb-8 text-left">
+            <h3 className="text-lg font-semibold text-blue-900 mb-3">
+              What's Next?
+            </h3>
+            <ul className="space-y-2 text-blue-800">
+              <li className="flex items-center">
+                <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Your subscription is now active
+              </li>
+              <li className="flex items-center">
+                <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                You have access to all plan features
+              </li>
+              <li className="flex items-center">
+                <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Billing will be automatic going forward
+              </li>
             </ul>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-3">
-            <Button
-              onClick={handleContinue}
-              className="w-full"
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={handleGoToSubscription}
+              className="bg-blue-600 text-white px-6 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors"
             >
-              Continue to Dashboard
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={refreshSubscriptionStatus}
-              disabled={isRefreshing}
-              className="w-full"
+              Go to My Subscription
+            </button>
+            <button
+              onClick={handleDownloadReceipt}
+              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-md font-medium hover:bg-gray-200 transition-colors"
             >
-              {isRefreshing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh Status
-                </>
-              )}
-            </Button>
-            
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/')}
-              className="w-full"
+              Download Receipt
+            </button>
+            <button
+              onClick={handleManageBilling}
+              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-md font-medium hover:bg-gray-200 transition-colors"
             >
-              <Home className="mr-2 h-4 w-4" />
-              Go Home
-            </Button>
+              Manage Billing
+            </button>
           </div>
-
-          {/* Support Information */}
-          <div className="text-center text-sm text-gray-500">
-            <p>
-              Need help? Contact our{' '}
-              <button
-                onClick={() => navigate('/support')}
-                className="text-blue-600 hover:underline"
-              >
-                support team
-              </button>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };

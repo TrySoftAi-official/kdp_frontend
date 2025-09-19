@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { UserRole, User } from '@/types';
 import { ROLES } from '@/lib/constants';
@@ -63,7 +64,7 @@ export const useAuth = () => {
     return hasPermission('manage_campaigns');
   };
 
-  const refreshUserData = async (): Promise<void> => {
+  const refreshUserData = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       const userData = await authApi.getCurrentUser();
@@ -84,7 +85,7 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authApi, setLoading, setUser, setError]);
 
   const sendPasswordlessLink = async (email: string): Promise<void> => {
     const success = await authApi.requestPasswordlessLogin({ email });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ArrowLeft, Settings, Download, ExternalLink, MessageCircle, Loader2 } from 'lucide-react';
+import { CreditCard, ArrowLeft, Settings, ExternalLink, MessageCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,6 +21,7 @@ export const MySubscriptionPage: React.FC = () => {
   const [showPlansModal, setShowPlansModal] = useState(false);
   const [isLoadingBillingPortal, setIsLoadingBillingPortal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSubscriptionData();
@@ -43,12 +44,17 @@ export const MySubscriptionPage: React.FC = () => {
 
   const loadSubscriptionData = async () => {
     try {
+      setError(null);
       const data = await subscriptionApi.getMySubscription();
       if (data) {
         setSubscriptionData(data);
+      } else {
+        setError('Failed to load subscription data');
       }
     } catch (error) {
-      toast.error('Failed to load subscription data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load subscription data';
+      setError(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -64,8 +70,28 @@ export const MySubscriptionPage: React.FC = () => {
     }
   };
 
-  const handleUpgrade = () => {
-    setShowPlansModal(true);
+  const handleUpgrade = async () => {
+    try {
+      // Check if user has access to upgrade
+      const accessCheck = await subscriptionApi.checkAccess('upgrade_subscription');
+      if (accessCheck && !accessCheck.has_access) {
+        // If no active subscription, show the plans modal anyway (user needs to subscribe)
+        if (accessCheck.message && accessCheck.message.includes('No active subscription')) {
+          console.log('No active subscription - showing plans modal for new subscription');
+          setShowPlansModal(true);
+          return;
+        }
+        // For other access issues, show error
+        toast.error(accessCheck.message || 'You do not have permission to upgrade your subscription');
+        return;
+      }
+      setShowPlansModal(true);
+    } catch (error) {
+      console.error('Failed to check upgrade access:', error);
+      // If access check fails, still show the modal (user might need to subscribe)
+      console.log('Access check failed - showing plans modal anyway');
+      setShowPlansModal(true);
+    }
   };
 
   const handlePlansModalClose = () => {
@@ -74,9 +100,50 @@ export const MySubscriptionPage: React.FC = () => {
     loadSubscriptionData();
   };
 
-  const handleCancel = () => {
-    // Refresh subscription data after cancellation
-    loadSubscriptionData();
+  const handleCancel = async () => {
+    try {
+      // Check if user has access to cancel
+      const accessCheck = await subscriptionApi.checkAccess('cancel_subscription');
+      if (accessCheck && !accessCheck.has_access) {
+        toast.error(accessCheck.message || 'You do not have permission to cancel your subscription');
+        return;
+      }
+      // Refresh subscription data after cancellation
+      loadSubscriptionData();
+    } catch (error) {
+      console.error('Failed to check cancel access:', error);
+      toast.error('Failed to verify cancellation permissions. Please try again.');
+    }
+  };
+
+  // Helper function for creating subscriptions (used by CheckoutModal)
+  const handleCreateSubscription = async (planId: string, billingCycle: 'monthly' | 'yearly') => {
+    try {
+      const result = await subscriptionApi.createSubscription({
+        plan_id: planId,
+        billing_cycle: billingCycle
+      });
+
+      if (result) {
+        if (result.success) {
+          if (result.checkout_data) {
+            // Redirect to Stripe checkout for paid plans
+            window.location.href = result.checkout_data.url;
+          } else {
+            // Free plan - subscription created successfully
+            toast.success(result.message || 'Subscription created successfully!');
+            loadSubscriptionData();
+          }
+        } else {
+          toast.error(result.message || 'Failed to create subscription');
+        }
+      } else {
+        toast.error('Failed to create subscription. Please try again.');
+      }
+    } catch (error) {
+      console.error('Failed to create subscription:', error);
+      toast.error('Failed to create subscription. Please try again.');
+    }
   };
 
   const handleBillingPortal = async () => {
@@ -123,6 +190,25 @@ Best regards,
 ${user?.name || user?.email}`);
     
     window.open(`mailto:support@forgekdp.com?subject=${subject}&body=${body}`, '_blank');
+  };
+
+  // Helper function for checking feature access (used by other components)
+  const checkFeatureAccess = async (feature: string) => {
+    try {
+      const accessCheck = await subscriptionApi.checkAccess(feature);
+      if (accessCheck) {
+        if (!accessCheck.has_access) {
+          toast.error(accessCheck.message || `You don't have access to ${feature}`);
+          return false;
+        }
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error(`Failed to check access for ${feature}:`, error);
+      toast.error(`Failed to verify access for ${feature}. Please try again.`);
+      return false;
+    }
   };
 
   if (!user) {
@@ -182,13 +268,35 @@ ${user?.name || user?.email}`);
               </>
             ) : (
               <>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Billing Portal
+              
               </>
             )}
           </Button>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-red-800">
+              <MessageCircle className="h-5 w-5" />
+              <div>
+                <p className="font-medium">Subscription Error</p>
+                <p className="text-sm">{error}</p>
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" size="sm" onClick={loadSubscriptionData}>
+                    Try Again
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleContactSupport}>
+                    Contact Support
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content */}
       <Tabs defaultValue="overview" className="space-y-6">
@@ -305,6 +413,7 @@ ${user?.name || user?.email}`);
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
 
       {/* Subscription Plans Modal */}

@@ -19,13 +19,14 @@ import { MySubscriptionPage } from '@/pages/MySubscription';
 import { PaymentCallback } from '@/pages/PaymentCallback';
 import { DynamicApiDemo } from '@/components/DynamicApiDemo';
 import { IntelligentAssistant } from '@/pages/IntelligentAssistant';
-import { CheckoutSuccess } from '@/pages/CheckoutSuccess';
+import CheckoutSuccess from '@/pages/CheckoutSuccess';
 import { CheckoutFailure } from '@/pages/CheckoutFailure';
 import { CheckoutError } from '@/pages/CheckoutError';
 import { PaymentFlowTest } from '@/pages/PaymentFlowTest';
 import { OrganizationManagement } from '@/pages/OrganizationManagement';
 import { DebugPage } from '@/pages/DebugPage';
 import { SubscriptionDemo } from '@/pages/SubscriptionDemo';
+import { AdCampaignManagement } from '@/pages/AdCampaignManagement';
 import { useAuth } from '@/hooks/useAuth';
 import { BookPrompt } from './components/create-book/BookPrompt';
 
@@ -93,6 +94,7 @@ function AppContent() {
         <Route path="api-demo" element={<DynamicApiDemo />} />
         <Route path="intelligent-assistant" element={<IntelligentAssistant />} />
         <Route path="BookPrompt" element={<BookPrompt onGenerateBook={() => {}} />} />
+        <Route path="ad-campaigns" element={<AdCampaignManagement />} />
         
         {/* Organization Management */}
         <Route 

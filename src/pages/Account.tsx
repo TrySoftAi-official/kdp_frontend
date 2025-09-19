@@ -12,10 +12,8 @@ import { toast } from '@/lib/toast';
 import { getAccountStatus, AccountStatus } from '@/api/additionalService';
 
 export const Account: React.FC = () => {
-  const { user, refreshUserData } = useAuth();
+  const { user, refreshUserData, isLoading } = useAuth();
   const userApi = useUserApi();
-
-  console.log("its My User : ",user);
   // Form states
   const [profileForm, setProfileForm] = useState({
     firstName: user?.name?.split(' ')[0] || '',
@@ -56,11 +54,15 @@ export const Account: React.FC = () => {
 
       // Load additional data
       loadUserData();
-    } else {
-      // If no user, try to refresh user data
+    }
+  }, [user]);
+
+  // Handle initial user loading
+  useEffect(() => {
+    if (!user && !isLoading) {
       refreshUserData();
     }
-  }, [user, refreshUserData]);
+  }, [user, isLoading, refreshUserData]);
 
   const loadUserData = async () => {
     try {

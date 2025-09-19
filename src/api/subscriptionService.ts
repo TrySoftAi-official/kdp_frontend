@@ -131,6 +131,25 @@ export interface SubscriptionReactivateRequest {
   billing_cycle?: 'monthly' | 'yearly';
 }
 
+export interface SubscriptionCreateRequest {
+  plan_id: string;
+  billing_cycle: 'monthly' | 'yearly';
+}
+
+export interface SubscriptionCreateResponse {
+  success: boolean;
+  message: string;
+  checkout_data?: any;
+}
+
+export interface CheckAccessResponse {
+  has_access: boolean;
+  message: string;
+  action: string;
+  user_id: number;
+  details: Record<string, any>;
+}
+
 export interface SubscriptionUsageCheckRequest {
   usage_type: string;
   increment?: boolean;
@@ -157,6 +176,90 @@ export interface UserSubscriptionWithPlanResponse {
   billing_history?: SubscriptionBilling[];
 }
 
+// Enhanced Subscription Types
+export interface EnhancedSubscriptionStatus {
+  has_subscription: boolean;
+  plan_type: string;
+  status?: string;
+  current_period_end?: string;
+  trial_end?: string;
+  canceled_at?: string;
+  restrictions: string[];
+  permissions: Record<string, any>;
+  can_generate_books: boolean;
+  can_upload_books: boolean;
+  can_view_analytics: boolean;
+  can_manage_organization: boolean;
+  can_manage_sub_users: boolean;
+}
+
+export interface PermissionCheckRequest {
+  permission: string;
+}
+
+export interface PermissionCheckResponse {
+  has_permission: boolean;
+  reason: string;
+  permission: string;
+  user_id: number;
+}
+
+export interface UsageLimitRequest {
+  usage_type: string;
+  increment?: boolean;
+}
+
+export interface UsageLimitResponse {
+  can_use: boolean;
+  usage_type: string;
+  details: Record<string, any>;
+  user_id: number;
+}
+
+export interface OrganizationCreateRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  settings?: Record<string, any>;
+}
+
+export interface OrganizationResponse {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  owner_id: number;
+  created_at: string;
+}
+
+export interface SubUserResponse {
+  id: number;
+  email: string;
+  username: string;
+  role: string;
+  is_owner: boolean;
+  created_at: string;
+}
+
+export interface SubUserInviteRequest {
+  email: string;
+  username: string;
+  role: string;
+}
+
+export interface SubUserInviteResponse {
+  id: number;
+  email: string;
+  username: string;
+  role: string;
+  status: string;
+  message: string;
+}
+
+export interface SubUserRoleUpdateRequest {
+  role: string;
+}
+
 // Subscription Service Class
 export class SubscriptionService {
   // Subscription Plans
@@ -175,6 +278,10 @@ export class SubscriptionService {
   // User Subscriptions
   static async getMySubscription(): Promise<AxiosResponse<UserSubscriptionWithPlanResponse>> {
     return apiClient.get('/subscription/my-subscription');
+  }
+
+  static async createSubscription(data: SubscriptionCreateRequest): Promise<AxiosResponse<SubscriptionCreateResponse>> {
+    return apiClient.post('/subscription/subscribe', data);
   }
 
   static async getMySubscriptionStatus(): Promise<AxiosResponse<SubscriptionStatus>> {
@@ -220,9 +327,70 @@ export class SubscriptionService {
     return apiClient.get(`/subscription/validate/${action}`);
   }
 
+  static async checkAccess(action: string): Promise<AxiosResponse<CheckAccessResponse>> {
+    return apiClient.get(`/subscription/check-access/${action}`);
+  }
+
   // Billing History
   static async getBillingHistory(limit: number = 10): Promise<AxiosResponse<SubscriptionBilling[]>> {
     return apiClient.get(`/subscription/billing/history?limit=${limit}`);
+  }
+
+  // Stripe Sync
+  static async syncMySubscription(): Promise<AxiosResponse<{
+    success: boolean;
+    message: string;
+    subscription_id?: number;
+    status?: string;
+  }>> {
+    return apiClient.post('/subscription/sync/my-subscription');
+  }
+
+  static async getSyncStatus(): Promise<AxiosResponse<{
+    total_users: number;
+    users_with_subscriptions: number;
+    subscription_status_breakdown: Record<string, number>;
+    sync_needed: boolean;
+  }>> {
+    return apiClient.get('/subscription/sync/status');
+  }
+
+  // Enhanced Subscription Endpoints
+  static async getEnhancedSubscriptionStatus(): Promise<AxiosResponse<EnhancedSubscriptionStatus>> {
+    return apiClient.get('/subscription/my-subscription/status');
+  }
+
+  static async checkPermission(data: PermissionCheckRequest): Promise<AxiosResponse<PermissionCheckResponse>> {
+    return apiClient.post('/subscription/check-permission', data);
+  }
+
+  static async checkUsageLimit(data: UsageLimitRequest): Promise<AxiosResponse<UsageLimitResponse>> {
+    return apiClient.post('/subscription/check-usage-limit', data);
+  }
+
+  // Organization Management
+  static async createOrganization(data: OrganizationCreateRequest): Promise<AxiosResponse<OrganizationResponse>> {
+    return apiClient.post('/subscription/create-organization', data);
+  }
+
+  static async getMyOrganization(): Promise<AxiosResponse<OrganizationResponse>> {
+    return apiClient.get('/subscription/my-organization');
+  }
+
+  static async getOrganizationUsers(): Promise<AxiosResponse<SubUserResponse[]>> {
+    return apiClient.get('/subscription/my-organization/users');
+  }
+
+  static async inviteSubUser(data: SubUserInviteRequest): Promise<AxiosResponse<SubUserInviteResponse>> {
+    return apiClient.post('/subscription/invite-sub-user', data);
+  }
+
+  static async updateSubUserRole(userId: number, data: SubUserRoleUpdateRequest): Promise<AxiosResponse<SubUserResponse>> {
+    return apiClient.put(`/subscription/sub-user/${userId}/role`, data);
+  }
+
+  static async removeSubUser(userId: number): Promise<AxiosResponse<void>> {
+    return apiClient.delete(`/subscription/sub-user/${userId}`);
   }
 
   // Helper methods
@@ -385,6 +553,17 @@ export const {
   checkFeatureAccess,
   validateSubscriptionAccess,
   getBillingHistory,
+  syncMySubscription,
+  getSyncStatus,
+  getEnhancedSubscriptionStatus,
+  checkPermission,
+  checkUsageLimit,
+  createOrganization,
+  getMyOrganization,
+  getOrganizationUsers,
+  inviteSubUser,
+  updateSubUserRole,
+  removeSubUser,
   getPlanLabel,
   getPlanColor,
   getStatusLabel,
