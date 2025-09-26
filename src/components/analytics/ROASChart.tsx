@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartData } from '@/types';
-import { CHART_COLORS } from '@/lib/constants';
+import { CHART_COLORS } from '@/utils/constants';
 
 interface ROASChartProps {
   data: ChartData[];

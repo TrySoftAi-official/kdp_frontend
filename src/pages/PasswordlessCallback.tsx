@@ -1,46 +1,54 @@
 // src/pages/PasswordlessCallback.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import CookieManager from '@/utils/cookies';
 
 export const PasswordlessCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
   const navigate = useNavigate();
-  const { completeMagicLink } = useAuthStore();
+  const { verifyMagicLink } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const hasProcessedRef = useRef(false);
+  const processingRef = useRef(false);
 
   useEffect(() => {
-    // Only run once when component mounts
-    if (hasProcessedRef.current) {
+    // Only run once when component mounts and we have a token
+    if (hasProcessedRef.current || !token || processingRef.current) {
       return;
     }
 
     const handlePasswordlessLogin = async () => {
       console.log('PasswordlessCallback: Token from URL:', token);
       hasProcessedRef.current = true;
-      
-      if (!token) {
-        console.log('PasswordlessCallback: No token found in URL');
-        setStatus('error');
-        setErrorMessage('No authentication token found in the link');
-        setTimeout(() => navigate('/login', { replace: true }), 3000);
-        return;
-      }
+      processingRef.current = true;
       
       try {
-        console.log('PasswordlessCallback: Calling completeMagicLink with token:', token);
-        await completeMagicLink(token);
-        console.log('PasswordlessCallback: Login successful');
-        setStatus('success');
+        console.log('PasswordlessCallback: Calling verifyMagicLink with token:', token);
+        const result = await verifyMagicLink(token);
         
-        // Wait a moment to show success state, then navigate
-        setTimeout(() => {
+        if (result.type === 'auth/verifyMagicLink/fulfilled') {
+          console.log('PasswordlessCallback: Login successful');
+          
+          // Verify that cookies are set correctly
+          const authData = CookieManager.getAuthData();
+          console.log('PasswordlessCallback: Auth data from cookies:', {
+            hasAccessToken: !!authData.accessToken,
+            hasRefreshToken: !!authData.refreshToken,
+            hasUser: !!authData.user,
+            isAuthenticated: authData.isAuthenticated
+          });
+          
+          setStatus('success');
+          
+          // Navigate immediately without additional delays
           navigate('/dashboard', { replace: true });
-        }, 1500);
+        } else {
+          throw new Error('Login verification failed');
+        }
       } catch (err: any) {
         console.error('PasswordlessCallback: Login failed', err);
         setStatus('error');
@@ -50,11 +58,13 @@ export const PasswordlessCallback: React.FC = () => {
         setTimeout(() => {
           navigate('/login', { replace: true });
         }, 3000);
+      } finally {
+        processingRef.current = false;
       }
     };
 
     handlePasswordlessLogin();
-  }, []); // Empty dependency array - only run once on mount
+  }, []); // Empty dependency array to run only once
 
   const renderContent = () => {
     switch (status) {

@@ -13,7 +13,7 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { PaymentDebugger } from '@/components/debug/PaymentDebugger';
 import { PaymentFlowTester } from '@/components/debug/PaymentFlowTester';
 import { ErrorBoundary } from '@/components/error/ErrorBoundary';

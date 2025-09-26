@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
 
 // Example 1: Analytics Page Integration

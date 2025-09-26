@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Niche } from '@/types';
-import { nichesApi } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { nichesApi } from '@/utils/api';
+import { formatCurrency } from '@/utils/utils';
 import { RoleBased } from '@/components/shared/RoleBased';
 
 export const Niches: React.FC = () => {

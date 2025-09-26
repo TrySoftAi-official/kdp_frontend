@@ -3,9 +3,9 @@ import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
-import { booksApi } from '@/lib/api';
-import { useUIStore } from '@/stores/uiStore';
+import { cn } from '@/utils/utils';
+import { booksApi } from '@/utils/api';
+import { useUI } from '@/redux/hooks/useUI';
 
 interface UploadResult {
   processed: number;
@@ -19,7 +19,7 @@ export const CSVUploader: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { addNotification } = useUIStore();
+  const { addNotification } = useUI();
 
   const handleFile = useCallback(async (file: File) => {
     if (!file) return;

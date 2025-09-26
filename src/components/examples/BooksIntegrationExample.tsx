@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, BookOpen, Plus, Search, Filter } from 'lucide-react';
-import { BookFilter, BookSort } from '@/api/bookService';
+import { BookFilter, BookSort } from '@/services/bookService';
 
 /**
  * Example component showing how to integrate the books API hooks

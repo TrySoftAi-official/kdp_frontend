@@ -19,7 +19,7 @@ import { SubscriptionStatusWidget } from '@/components/subscription/Subscription
 import { FeatureGate, UsageGate, ConditionalFeature, ConditionalUsage } from '@/components/shared/FeatureGate';
 import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 export const SubscriptionDemo: React.FC = () => {
   const { 

@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { useUserApi } from '@/hooks/useUserApi';
-import { ROLES } from '@/lib/constants';
-import { toast } from '@/lib/toast';
-import { getAccountStatus, AccountStatus } from '@/api/additionalService';
+import { ROLES } from '@/utils/constants';
+import { toast } from '@/utils/toast';
+import { getAccountStatus, AccountStatus } from '@/services/additionalService';
 
 export const Account: React.FC = () => {
   const { user, refreshUserData, isLoading } = useAuth();

@@ -16,7 +16,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 interface SubscriptionValidatorProps {
   onValidationResult?: (action: string, canPerform: boolean, message: string) => void;

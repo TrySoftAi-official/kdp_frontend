@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApi } from './useApi';
-import { useAuthStore } from '@/stores/authStore';
-import { toast } from '@/lib/toast';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { toast } from '@/utils/toast';
 
 interface UseDynamicApiOptions {
   enableAutoRefresh?: boolean;
@@ -32,7 +32,7 @@ export const useDynamicApi = (options: UseDynamicApiOptions = {}) => {
   } = options;
 
   const { auth, user, books, payments } = useApi();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated } = useAuth();
   const [apiState, setApiState] = useState<ApiState>({
     isLoading: false,
     isError: false,

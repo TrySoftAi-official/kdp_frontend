@@ -11,7 +11,7 @@ import {
   TestTube
 } from 'lucide-react';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 interface TestResult {
   test: string;

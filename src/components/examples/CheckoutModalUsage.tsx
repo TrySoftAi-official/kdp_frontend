@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 
 // Example: How to use the updated CheckoutModal with embedded payment form
 export const CheckoutModalUsage: React.FC = () => {

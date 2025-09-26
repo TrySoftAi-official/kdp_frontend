@@ -1,5 +1,5 @@
-import { useAuth } from './useAuth';
-import { ROLE_PERMISSIONS, SUBSCRIPTION_PLANS } from '@/lib/constants';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { ROLE_PERMISSIONS, SUBSCRIPTION_PLANS } from '@/utils/constants';
 
 export const usePermissions = () => {
   const { user } = useAuth();

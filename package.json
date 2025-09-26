@@ -5,9 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run build:prod",
+    "build:prod": "vite build --mode production",
+    "build:check": "tsc --noEmit --project tsconfig.prod.json",
+    "build:force": "vite build --mode production --force",
+    "build:clean": "rimraf dist && npm run build:prod",
+    "type-check": "tsc --noEmit",
+    "type-check:prod": "tsc --noEmit --project tsconfig.prod.json",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "preview": "vite preview",
+    "preview:build": "npm run build:prod && npm run preview"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.0.4",
@@ -19,6 +27,7 @@
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-switch": "^1.0.3",
     "@radix-ui/react-tabs": "^1.0.4",
+    "@reduxjs/toolkit": "^2.9.0",
     "@stripe/react-stripe-js": "^4.0.2",
     "@stripe/stripe-js": "^7.9.0",
     "@tanstack/react-query": "^5.87.1",
@@ -29,11 +38,18 @@
     "dotenv": "^17.2.2",
     "lucide-react": "^0.288.0",
     "react": "^18.2.0",
+    "react-cookie": "^6.1.1",
     "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.6.0",
+    "react-redux": "^9.2.0",
     "react-router-dom": "^6.16.0",
     "recharts": "^2.8.0",
+    "redux-persist": "^6.0.0",
     "tailwind-merge": "^1.14.0",
     "tailwindcss-animate": "^1.0.7",
+    "universal-cookie": "^6.1.0",
+    "usehooks-ts": "^3.1.1",
+    "zod": "^4.1.11",
     "zustand": "^4.4.3"
   },
   "devDependencies": {
@@ -48,8 +64,9 @@
     "eslint-plugin-react-refresh": "^0.4.3",
     "postcss": "^8.4.29",
     "prettier": "^3.0.3",
+    "rimraf": "^5.0.5",
     "tailwindcss": "^3.3.3",
     "typescript": "^5.0.2",
-    "vite": "^4.4.5"
+    "vite": "^4.5.14"
   }
 }

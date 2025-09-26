@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useAuth } from './useAuth';
-import { apiClient } from '@/api/client';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { apiClient } from '@/services/client';
 
 // Types
 interface SubscriptionStatus {

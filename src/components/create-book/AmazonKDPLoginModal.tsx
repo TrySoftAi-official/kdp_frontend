@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, ExternalLink, CheckCircle, Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { AdditionalService } from '@/api/additionalService';
+import AdditionalService from '@/services/additionalService';
 
 interface AmazonKDPLoginModalProps {
   isOpen: boolean;

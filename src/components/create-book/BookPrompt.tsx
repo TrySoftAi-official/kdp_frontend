@@ -5,18 +5,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FileText, Sparkles, AlertCircle, ExternalLink, CheckCircle, BookOpen, Zap, Clock, Settings, Upload, Trash2, RefreshCw, Monitor, Database, Server } from 'lucide-react';
 import { useCreateBookContext } from './CreateBookContext';
-import { useAuth } from '@/hooks/useAuth';
-import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '../../redux/hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { AmazonKDPLoginModal } from './AmazonKDPLoginModal';
 import { 
-  AdditionalService, 
+  // AdditionalService, 
   BookGenerationResponse, 
   ConfigurationUpdate,
   UploadProgressResponse,
   BookStatusDebugResponse,
   BookQueueResponse,
   EnvStatusResponse
-} from '@/api/additionalService';
+} from '@/services/additionalService';
 
 interface BookPromptProps {
   // Removed onGenerateBook as we're using additional service APIs directly
@@ -213,27 +213,6 @@ export const BookPrompt: React.FC<BookPromptProps> = () => {
     }
   };
 
-  const handleGeneratePendingBooks = async () => {
-    setIsGeneratingPending(true);
-    setGenerationStatus('Generating pending books...');
-    setValidationMessage('');
-
-    try {
-      const response = await AdditionalService.generatePendingBooks();
-
-      if (response.data) {
-        setGeneratedBooks(prev => [...prev, response.data]);
-        setGenerationStatus('Pending books generated successfully!');
-        setValidationMessage('');
-      }
-    } catch (error) {
-      console.error('Error generating pending books:', error);
-      setValidationMessage('Failed to generate pending books. Please try again.');
-      setGenerationStatus('');
-    } finally {
-      setIsGeneratingPending(false);
-    }
-  };
 
   // Configuration Management Functions
   const handleUpdateConfiguration = async () => {

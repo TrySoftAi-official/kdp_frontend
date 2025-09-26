@@ -25,10 +25,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusBadge } from './StatusBadge';
 import { Book, FilterOptions, SortOptions } from '@/types';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { booksApi } from '@/lib/api';
-import { useUIStore } from '@/stores/uiStore';
-import { useAuth } from '@/hooks/useAuth';
+import { formatCurrency, formatDate } from '@/utils/utils';
+import { booksApi } from '@/utils/api';
+import { useUI } from '@/redux/hooks/useUI';
+import { useAuth } from '@/redux/hooks/useAuth';
 
 interface BookTableProps {
   filters?: FilterOptions;
@@ -42,7 +42,7 @@ export const BookTable: React.FC<BookTableProps> = ({
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<SortOptions>({ field: 'date', direction: 'desc' });
-  const { addNotification } = useUIStore();
+  const { addNotification } = useUI();
   const { canWrite } = useAuth();
 
   useEffect(() => {

@@ -3,33 +3,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { 
   CreditCard, 
   CheckCircle, 
   XCircle, 
   AlertCircle, 
   Crown, 
-  Zap, 
   Shield, 
-  Users, 
-  BarChart3, 
-  Settings,
   Loader2,
   RefreshCw,
   TrendingUp,
-  Calendar,
-  DollarSign
+  Calendar
 } from 'lucide-react';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { 
   SubscriptionPlan, 
-  UserSubscription, 
-  SubscriptionStatus, 
   SubscriptionBilling,
   UserSubscriptionWithPlanResponse 
-} from '@/api/subscriptionService';
-import { toast } from '@/lib/toast';
+} from '@/apis/subscription';
+import { toast } from '@/utils/toast';
 
 interface SubscriptionManagerProps {
   onUpgrade?: (planId: string) => void;
@@ -46,12 +38,11 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   showCancelButton = true,
   className = ''
 }) => {
-  const subscriptionApi = useSubscriptionApi();
+  const { currentSubscription: reduxCurrentSubscription, fetchCurrent } = useSubscription();
   
   // State
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [currentSubscription, setCurrentSubscription] = useState<UserSubscriptionWithPlanResponse | null>(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [billingHistory, setBillingHistory] = useState<SubscriptionBilling[]>([]);
   const [features, setFeatures] = useState<Record<string, any>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -66,19 +57,12 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
   const loadSubscriptionData = async () => {
     setIsLoading(true);
     try {
-      const [plansData, subscriptionData, statusData, billingData, featuresData] = await Promise.all([
-        subscriptionApi.getSubscriptionPlans(true),
-        subscriptionApi.getMySubscription(),
-        subscriptionApi.getMySubscriptionStatus(),
-        subscriptionApi.getBillingHistory(5),
-        subscriptionApi.getMyFeatures()
-      ]);
+      await subscriptionApi.loadAll();
 
-      if (plansData) setPlans(plansData);
-      if (subscriptionData) setCurrentSubscription(subscriptionData);
-      if (statusData) setSubscriptionStatus(statusData);
-      if (billingData) setBillingHistory(billingData);
-      if (featuresData) setFeatures(featuresData);
+      if (subscriptionApi.plans) setPlans(subscriptionApi.plans);
+      if (subscriptionApi.currentSubscription) setCurrentSubscription(subscriptionApi.currentSubscription);
+      if (subscriptionApi.billingHistory) setBillingHistory(subscriptionApi.billingHistory);
+      if (subscriptionApi.features) setFeatures(subscriptionApi.features);
 
     } catch (error) {
       console.error('Failed to load subscription data:', error);
@@ -92,9 +76,8 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
     setIsUpgrading(true);
     try {
       const result = await subscriptionApi.upgradeSubscription({
-        new_plan_id: planId,
+        new_plan: planId,
         billing_cycle: 'monthly',
-        prorate: true,
         immediate: false
       });
 
@@ -119,11 +102,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
 
     setIsCancelling(true);
     try {
-      const result = await subscriptionApi.cancelSubscription({
-        cancel_at_period_end: true,
-        cancellation_reason: 'User requested cancellation',
-        feedback: 'User cancelled through UI'
-      });
+      const result = await subscriptionApi.cancelSubscription(false); // Cancel at period end
 
       if (result) {
         toast.success('Subscription cancelled successfully. You will retain access until the end of your billing period.');
@@ -192,9 +171,9 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
               <div className="flex items-center gap-3">
                 <Badge 
                   variant={subscriptionApi.isSubscriptionActive(currentSubscription.subscription) ? 'default' : 'secondary'}
-                  className={subscriptionApi.getStatusColor(currentSubscription.subscription.status)}
+                  className={subscriptionApi.getStatusColor(currentSubscription.subscription?.status || 'inactive')}
                 >
-                  {subscriptionApi.getStatusLabel(currentSubscription.subscription.status)}
+                  {subscriptionApi.getStatusLabel(currentSubscription.subscription?.status || 'inactive')}
                 </Badge>
                 <span className="font-semibold">
                   {subscriptionApi.getPlanLabel(currentSubscription.plan.plan_id)}
@@ -204,7 +183,7 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 </span>
               </div>
               <div className="text-sm text-muted-foreground">
-                Next billing: {subscriptionApi.formatDate(currentSubscription.subscription.current_period_end)}
+                Next billing: {currentSubscription.subscription?.current_period_end ? subscriptionApi.formatDate(currentSubscription.subscription.current_period_end) : 'N/A'}
               </div>
             </div>
 
@@ -214,12 +193,12 @@ export const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({
                 <div className="flex items-center justify-between text-sm">
                   <span>Books this period</span>
                   <span>
-                    {currentSubscription.subscription.books_created_this_period} / {currentSubscription.plan.limits.books_per_month}
+                    {currentSubscription.subscription?.books_created_this_period || 0} / {currentSubscription.plan.limits.books_per_month}
                   </span>
                 </div>
                 <Progress 
                   value={subscriptionApi.getUsagePercentage(
-                    currentSubscription.subscription.books_created_this_period,
+                    currentSubscription.subscription?.books_created_this_period || 0,
                     currentSubscription.plan.limits.books_per_month
                   )} 
                   className="h-2"

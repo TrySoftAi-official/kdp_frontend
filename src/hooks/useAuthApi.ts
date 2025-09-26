@@ -1,19 +1,29 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useAuthStore } from '@/stores/authStore';
-import AuthService, { 
-  LoginCredentials, 
-  RegisterData, 
-  AuthResponse, 
-  GoogleOAuthRequest,
-  PasswordResetRequest,
-  PasswordResetData,
-  PasswordlessLoginRequest,
-  PasswordlessLoginData,
-  TwoFactorVerify,
-  TwoFactorLogin,
+import { useState, useCallback } from 'react';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { 
+  login,
+  register,
+  refreshToken,
+  logout,
+  getCurrentUser,
+  forgotPassword,
+  resetPassword,
+  verifyEmail,
+  googleOAuth,
+  setupTwoFactor,
+  verifyTwoFactor,
+  disableTwoFactor,
+  twoFactorLogin,
+  passwordlessLogin,
+  passwordlessVerify,
+  getSecurityStatus,
+  getAuditLogs,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
   UserResponse
-} from '@/api/authService';
-import { getErrorMessage } from '@/api/client';
+} from '@/apis/auth';
+import { getErrorMessage } from '@/apis/apiClient';
 import { AxiosError } from 'axios';
 
 interface UseAuthApiReturn {
@@ -21,32 +31,30 @@ interface UseAuthApiReturn {
   isLoading: boolean;
   error: string | null;
   
-  // Auth actions
-  login: (credentials: LoginCredentials) => Promise<AuthResponse | null>;
-  register: (data: RegisterData) => Promise<AuthResponse | null>;
-  logout: () => Promise<void>;
-  refreshToken: () => Promise<boolean>;
+  // Authentication
+  loginUser: (credentials: LoginRequest) => Promise<AuthResponse | null>;
+  registerUser: (data: RegisterRequest) => Promise<AuthResponse | null>;
+  logoutUser: () => Promise<boolean>;
+  refreshUserToken: () => Promise<boolean>;
   
   // Password management
-  forgotPassword: (data: PasswordResetRequest) => Promise<boolean>;
-  resetPassword: (data: PasswordResetData) => Promise<boolean>;
+  forgotUserPassword: (email: string) => Promise<boolean>;
+  resetUserPassword: (token: string, password: string) => Promise<boolean>;
   
-  // Passwordless login
-  requestPasswordlessLogin: (data: PasswordlessLoginRequest) => Promise<boolean>;
-  passwordlessLogin: (data: PasswordlessLoginData) => Promise<AuthResponse | null>;
+  // Email verification
+  verifyUserEmail: (token: string) => Promise<boolean>;
   
   // Google OAuth
-  getGoogleAuthUrl: () => Promise<string | null>;
-  googleLogin: (data: GoogleOAuthRequest) => Promise<AuthResponse | null>;
+  googleLogin: (data: any) => Promise<AuthResponse | null>;
   
   // Two-factor authentication
   setup2FA: () => Promise<any>;
-  verify2FA: (data: TwoFactorVerify) => Promise<boolean>;
-  login2FA: (data: TwoFactorLogin) => Promise<AuthResponse | null>;
-  disable2FA: (data: TwoFactorVerify) => Promise<boolean>;
+  verify2FA: (data: any) => Promise<boolean>;
+  login2FA: (data: any) => Promise<AuthResponse | null>;
+  disable2FA: (data: any) => Promise<boolean>;
   
   // User management
-  getCurrentUser: () => Promise<UserResponse | null>;
+  getCurrentUserData: () => Promise<UserResponse | null>;
   
   // Utilities
   clearError: () => void;
@@ -65,7 +73,7 @@ export const useAuthApi = (): UseAuthApiReturn => {
     setError: setAuthError,
     clearError: clearAuthError,
     logout: logoutStore,
-  } = useAuthStore();
+  } = useAuth();
 
   // Clear error helper
   const clearError = useCallback(() => {
@@ -73,36 +81,27 @@ export const useAuthApi = (): UseAuthApiReturn => {
     clearAuthError();
   }, [clearAuthError]);
 
-  // Login
-  const login = useCallback(async (credentials: LoginCredentials): Promise<AuthResponse | null> => {
+  // Authentication functions
+  const loginUser = useCallback(async (credentials: LoginRequest): Promise<AuthResponse | null> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await AuthService.login(credentials);
-      const data = response.data;
+      const response = await login(credentials);
       
-      // Handle 2FA requirement
-      if ('requires_2fa' in data && data.requires_2fa) {
-        // Store temp token for 2FA completion
-        localStorage.setItem('temp_token', data.temp_token);
-        throw new Error('2FA_REQUIRED');
-      }
-      
-      // Handle successful login
-      if ('access_token' in data) {
-        AuthService.storeTokens({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
+      if (response && response.user) {
+        setUser({
+          id: response.user.id,
+          email: response.user.email,
+          name: response.user.username,
+          role: response.user.role,
+          avatar: undefined
         });
-        AuthService.storeUser(data.user);
-        setUser(data.user);
-        return data;
       }
       
-      return null;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      return response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       setAuthError(errorMessage);
       return null;
@@ -111,25 +110,26 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, [setUser, setAuthError]);
 
-  // Register
-  const register = useCallback(async (data: RegisterData): Promise<AuthResponse | null> => {
+  const registerUser = useCallback(async (data: RegisterRequest): Promise<AuthResponse | null> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await AuthService.register(data);
-      const authData = response.data;
+      const response = await register(data);
       
-      AuthService.storeTokens({
-        access_token: authData.access_token,
-        refresh_token: authData.refresh_token,
-      });
-      AuthService.storeUser(authData.user);
-      setUser(authData.user);
+      if (response && response.user) {
+        setUser({
+          id: response.user.id,
+          email: response.user.email,
+          name: response.user.username,
+          role: response.user.role,
+          avatar: undefined
+        });
+      }
       
-      return authData;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      return response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       setAuthError(errorMessage);
       return null;
@@ -138,117 +138,107 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, [setUser, setAuthError]);
 
-  // Logout
-  const logout = useCallback(async (): Promise<void> => {
+  const logoutUser = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const tokens = AuthService.getStoredTokens();
-      if (tokens.refreshToken) {
-        await AuthService.logout({ refresh_token: tokens.refreshToken });
-      }
-    } catch (err) {
-      // Log error but don't prevent logout
-      console.error('Logout error:', err);
-    } finally {
-      AuthService.clearTokens();
+      await logout();
       logoutStore();
+      return true;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
+      setError(errorMessage);
+      // Still logout locally even if API call fails
+      logoutStore();
+      return false;
+    } finally {
       setIsLoading(false);
     }
   }, [logoutStore]);
 
-  // Refresh token
-  const refreshToken = useCallback(async (): Promise<boolean> => {
+  const refreshUserToken = useCallback(async (): Promise<boolean> => {
     try {
-      const tokens = AuthService.getStoredTokens();
-      if (!tokens.refreshToken) {
-        return false;
+      const response = await refreshToken();
+      return !!response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
+      setError(errorMessage);
+      return false;
+    }
+  }, []);
+
+  // Password management functions
+  const forgotUserPassword = useCallback(async (email: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await forgotPassword({ email });
+      return true;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
+      setError(errorMessage);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const resetUserPassword = useCallback(async (token: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await resetPassword({ token, password });
+      return true;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
+      setError(errorMessage);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Email verification functions
+  const verifyUserEmail = useCallback(async (token: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await verifyEmail({ token });
+      return true;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
+      setError(errorMessage);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Google OAuth functions
+  const googleLogin = useCallback(async (data: any): Promise<AuthResponse | null> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await googleOAuth(data);
+      
+      if (response && response.user) {
+        setUser({
+          id: response.user.id,
+          email: response.user.email,
+          name: response.user.username,
+          role: response.user.role,
+          avatar: undefined
+        });
       }
       
-      const response = await AuthService.refresh({ refresh_token: tokens.refreshToken });
-      const { access_token } = response.data;
-      
-      localStorage.setItem('access_token', access_token);
-      return true;
-    } catch (err) {
-      console.error('Token refresh failed:', err);
-      AuthService.clearTokens();
-      logoutStore();
-      return false;
-    }
-  }, [logoutStore]);
-
-  // Forgot password
-  const forgotPassword = useCallback(async (data: PasswordResetRequest): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      await AuthService.forgotPassword(data);
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Reset password
-  const resetPassword = useCallback(async (data: PasswordResetData): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      await AuthService.resetPassword(data);
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Request passwordless login
-  const requestPasswordlessLogin = useCallback(async (data: PasswordlessLoginRequest): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      await AuthService.requestPasswordlessLogin(data);
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Passwordless login
-  const passwordlessLogin = useCallback(async (data: PasswordlessLoginData): Promise<AuthResponse | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await AuthService.passwordlessLogin(data);
-      const authData = response.data;
-      
-      AuthService.storeTokens({
-        access_token: authData.access_token,
-        refresh_token: authData.refresh_token,
-      });
-      AuthService.storeUser(authData.user);
-      setUser(authData.user);
-      
-      return authData;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      return response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       setAuthError(errorMessage);
       return null;
@@ -257,60 +247,16 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, [setUser, setAuthError]);
 
-  // Get Google auth URL
-  const getGoogleAuthUrl = useCallback(async (): Promise<string | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await AuthService.getGoogleAuthUrl();
-      return response.data.auth_url;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Google login
-  const googleLogin = useCallback(async (data: GoogleOAuthRequest): Promise<AuthResponse | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await AuthService.googleLogin(data);
-      const authData = response.data;
-      
-      AuthService.storeTokens({
-        access_token: authData.access_token,
-        refresh_token: authData.refresh_token,
-      });
-      AuthService.storeUser(authData.user);
-      setUser(authData.user);
-      
-      return authData;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      setAuthError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setUser, setAuthError]);
-
-  // Setup 2FA
+  // Two-factor authentication functions
   const setup2FA = useCallback(async (): Promise<any> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await AuthService.setup2FA();
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      const response = await setupTwoFactor();
+      return response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       return null;
     } finally {
@@ -318,16 +264,15 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, []);
 
-  // Verify 2FA
-  const verify2FA = useCallback(async (data: TwoFactorVerify): Promise<boolean> => {
+  const verify2FA = useCallback(async (data: any): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      await AuthService.verify2FA(data);
+      await verifyTwoFactor(data);
       return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       return false;
     } finally {
@@ -335,25 +280,26 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, []);
 
-  // Login with 2FA
-  const login2FA = useCallback(async (data: TwoFactorLogin): Promise<AuthResponse | null> => {
+  const login2FA = useCallback(async (data: any): Promise<AuthResponse | null> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await AuthService.login2FA(data);
-      const authData = response.data;
+      const response = await twoFactorLogin(data);
       
-      AuthService.storeTokens({
-        access_token: authData.access_token,
-        refresh_token: authData.refresh_token,
-      });
-      AuthService.storeUser(authData.user);
-      setUser(authData.user);
+      if (response && response.user) {
+        setUser({
+          id: response.user.id,
+          email: response.user.email,
+          name: response.user.username,
+          role: response.user.role,
+          avatar: undefined
+        });
+      }
       
-      return authData;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      return response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       setAuthError(errorMessage);
       return null;
@@ -362,16 +308,15 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, [setUser, setAuthError]);
 
-  // Disable 2FA
-  const disable2FA = useCallback(async (data: TwoFactorVerify): Promise<boolean> => {
+  const disable2FA = useCallback(async (data: any): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     
     try {
-      await AuthService.disable2FA(data);
+      await disableTwoFactor(data);
       return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       return false;
     } finally {
@@ -379,63 +324,37 @@ export const useAuthApi = (): UseAuthApiReturn => {
     }
   }, []);
 
-  // Get current user
-  const getCurrentUser = useCallback(async (): Promise<UserResponse | null> => {
-    setIsLoading(true);
-    setError(null);
-    
+  // User management functions
+  const getCurrentUserData = useCallback(async (): Promise<UserResponse | null> => {
     try {
-      const response = await AuthService.getCurrentUser();
-      const userData = response.data;
-      setUser(userData);
-      return userData;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
+      const response = await getCurrentUser();
+      return response;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error as AxiosError);
       setError(errorMessage);
       return null;
-    } finally {
-      setIsLoading(false);
     }
-  }, [setUser]);
-
-  // Initialize auth state on mount
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const storedUser = AuthService.getStoredUser();
-      const isAuth = AuthService.isAuthenticated();
-      
-      if (isAuth && storedUser) {
-        setUser(storedUser);
-      } else if (isAuth) {
-        // Try to get current user from API
-        await getCurrentUser();
-      }
-    };
-    
-    initializeAuth();
-  }, [setUser, getCurrentUser]);
+  }, []);
 
   return {
     // State
     isLoading,
     error,
     
-    // Auth actions
-    login,
-    register,
-    logout,
-    refreshToken,
+    // Authentication
+    loginUser,
+    registerUser,
+    logoutUser,
+    refreshUserToken,
     
     // Password management
-    forgotPassword,
-    resetPassword,
+    forgotUserPassword,
+    resetUserPassword,
     
-    // Passwordless login
-    requestPasswordlessLogin,
-    passwordlessLogin,
+    // Email verification
+    verifyUserEmail,
     
     // Google OAuth
-    getGoogleAuthUrl,
     googleLogin,
     
     // Two-factor authentication
@@ -445,7 +364,7 @@ export const useAuthApi = (): UseAuthApiReturn => {
     disable2FA,
     
     // User management
-    getCurrentUser,
+    getCurrentUserData,
     
     // Utilities
     clearError,

@@ -12,8 +12,7 @@ import {
   CheckCircle,
   Loader2
 } from 'lucide-react';
-import { AdditionalService } from '@/api/additionalService';
-import AdditionalServiceDefault from '@/api/additionalService';
+import AdditionalService from '@/services/additionalService';
 
 interface KDPCredentialsModalProps {
   isOpen: boolean;

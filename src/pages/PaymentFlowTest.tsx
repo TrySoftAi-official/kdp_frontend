@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { toast } from '@/lib/toast';
-import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/utils/toast';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { Crown, CreditCard, CheckCircle } from 'lucide-react';
 
 export const PaymentFlowTest: React.FC = () => {

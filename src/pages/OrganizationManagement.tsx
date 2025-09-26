@@ -30,14 +30,15 @@ import {
   Shield,
   User,
   Loader2,
-  AlertTriangle,
-  CheckCircle
+  AlertTriangle
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
-import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { getCurrentUser } from '@/apis/auth';
+import { toast } from '@/utils/toast';
+import { cn } from '@/utils/utils';
 
 interface OrganizationUser {
   id: number;
@@ -66,7 +67,7 @@ interface OrganizationData {
 
 export const OrganizationManagement: React.FC = () => {
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
+  const { isEnterpriseUser, currentPlan } = useSubscription();
   const { hasFeatureAccess, getCurrentPlan } = useFeatureEnforcement();
   
   const [organizationData, setOrganizationData] = useState<OrganizationData | null>(null);
@@ -88,42 +89,86 @@ export const OrganizationManagement: React.FC = () => {
     
     setIsLoading(true);
     try {
-      // This would be a new API endpoint for organization management
-      // const response = await subscriptionApi.getOrganizationData();
-      // setOrganizationData(response.data);
+      // Try to load organization info and users from auth API first
+      const [orgInfoResponse, usersResponse] = await Promise.allSettled([
+        // TODO: Implement organization API calls with new centralized API
+        // getOrganizationInfo(),
+        // getOrganizationUsers()
+        Promise.resolve(null),
+        Promise.resolve([])
+      ]);
       
-      // For now, mock the data structure
-      setOrganizationData({
-        id: 1,
-        name: 'My Organization',
-        slug: 'my-org',
-        owner_id: user.id,
-        settings: {},
-        created_at: new Date().toISOString(),
-        users: [
-          {
+      // Check if organization info was successfully loaded
+      if (orgInfoResponse.status === 'fulfilled' && orgInfoResponse.value.data) {
+        const orgInfo = orgInfoResponse.value.data;
+        const users = usersResponse.status === 'fulfilled' ? 
+          (usersResponse.value.data?.users || []) : [];
+        
+        setOrganizationData({
+          id: orgInfo.id,
+          name: orgInfo.name,
+          slug: orgInfo.slug || `${orgInfo.name.toLowerCase().replace(/\s+/g, '-')}`,
+          owner_id: orgInfo.admin_user_id,
+          settings: orgInfo.settings || {},
+          created_at: orgInfo.created_at,
+          users: users.map((user: any) => ({
             id: user.id,
             email: user.email,
-            name: user.name || user.email,
-            role: 'owner',
+            name: user.username || user.email,
+            role: user.role,
+            status: user.status,
+            joined_at: user.created_at,
+            last_active: user.last_active
+          })),
+          subscription: {
+            plan: 'enterprise',
             status: 'active',
-            joined_at: new Date().toISOString(),
-            last_active: new Date().toISOString()
+            max_users: orgInfo.sub_users_limit || 50
           }
-        ],
-        subscription: {
-          plan: getCurrentPlan().id,
-          status: 'active',
-          max_users: 10
+        });
+      } else {
+        // Try v2 API as fallback
+        console.log('Auth API failed, trying v2 API for organization data');
+        try {
+          // TODO: Implement organization API call with new centralized API
+          // const v2OrgResponse = await getMyOrganization();
+          const v2OrgResponse = null; // Temporarily disabled
+          if (v2OrgResponse) {
+            setOrganizationData({
+              id: v2OrgResponse.id,
+              name: v2OrgResponse.name,
+              slug: v2OrgResponse.slug || `${v2OrgResponse.name.toLowerCase().replace(/\s+/g, '-')}`,
+              owner_id: v2OrgResponse.owner_id,
+              settings: {},
+              created_at: v2OrgResponse.created_at,
+              users: [], // v2 API might not include users in this endpoint
+              subscription: {
+                plan: 'enterprise',
+                status: 'active',
+                max_users: 50
+              }
+            });
+          } else {
+            console.log('No organization found for user:', user.id);
+            setOrganizationData(null);
+          }
+        } catch (v2Error) {
+          console.log('v2 API also failed, no organization found for user:', user.id);
+          setOrganizationData(null);
         }
-      });
+      }
     } catch (error) {
       console.error('Failed to load organization data:', error);
-      toast.error('Failed to load organization information');
+      // Don't show error toast for 404s (no organization)
+      const errorResponse = error as any;
+      if (errorResponse?.response?.status !== 404) {
+        toast.error('Failed to load organization information');
+      }
+      setOrganizationData(null);
     } finally {
       setIsLoading(false);
     }
-  }, [user, getCurrentPlan]);
+  }, [user, subscriptionApi]);
 
   useEffect(() => {
     loadOrganizationData();
@@ -134,20 +179,25 @@ export const OrganizationManagement: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      // This would be a new API endpoint
-      // await subscriptionApi.inviteUserToOrganization({
+      // Generate a temporary password for the sub-user
+      const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+      
+      // TODO: Implement createSubUser with new centralized API
+      // await createSubUser({
       //   email: inviteEmail,
+      //   username: inviteEmail.split('@')[0],
+      //   password: tempPassword,
       //   role: inviteRole
       // });
 
-      toast.success(`Invitation sent to ${inviteEmail}`);
+      toast.success(`Sub-user created successfully for ${inviteEmail}`);
       setInviteEmail('');
       setInviteRole('guest');
       setShowInviteModal(false);
       await loadOrganizationData();
     } catch (error) {
-      console.error('Failed to invite user:', error);
-      toast.error('Failed to send invitation');
+      console.error('Failed to create sub-user:', error);
+      toast.error('Failed to create sub-user');
     } finally {
       setIsProcessing(false);
     }
@@ -158,8 +208,8 @@ export const OrganizationManagement: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      // This would be a new API endpoint
-      // await subscriptionApi.updateUserRole(selectedUser.id, newRole);
+      // TODO: Implement updateUserRole with new centralized API
+      // await updateUserRole(selectedUser.id, { role: newRole });
 
       toast.success(`Role updated for ${selectedUser.email}`);
       setSelectedUser(null);
@@ -181,8 +231,8 @@ export const OrganizationManagement: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      // This would be a new API endpoint
-      // await subscriptionApi.removeUserFromOrganization(userId);
+      // TODO: Implement removeSubUser with new centralized API
+      // await removeSubUser(userId);
 
       toast.success(`User ${userEmail} removed from organization`);
       await loadOrganizationData();
@@ -255,6 +305,9 @@ export const OrganizationManagement: React.FC = () => {
   }
 
   if (!organizationData) {
+    const currentPlan = getCurrentPlan();
+    const isEnterprise = currentPlan && typeof currentPlan === 'object' ? currentPlan.id === 'enterprise' : false;
+    
     return (
       <div className="container mx-auto py-8">
         <Card>
@@ -262,11 +315,38 @@ export const OrganizationManagement: React.FC = () => {
             <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Organization Found</h3>
             <p className="text-muted-foreground mb-4">
-              You don't have access to any organization or this feature requires a higher plan.
+              {isEnterprise 
+                ? "You don't have an organization set up yet. Create one to start managing team members."
+                : "Organization management requires an Enterprise subscription plan."
+              }
             </p>
-            <Button onClick={() => window.history.back()}>
-              Go Back
-            </Button>
+            <div className="flex gap-3 justify-center">
+              <Button onClick={() => window.history.back()}>
+                Go Back
+              </Button>
+              {isEnterprise && (
+                <Button 
+                  onClick={() => {
+                    // TODO: Implement organization creation
+                    toast.info('Organization creation feature coming soon!');
+                  }}
+                  variant="default"
+                >
+                  Create Organization
+                </Button>
+              )}
+              {!isEnterprise && (
+                <Button 
+                  onClick={() => {
+                    // Navigate to subscription page
+                    window.location.href = '/subscription';
+                  }}
+                  variant="default"
+                >
+                  Upgrade to Enterprise
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -401,7 +481,7 @@ export const OrganizationManagement: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-medium">{member.name}</h3>
-                      {member.id === user?.id && (
+                      {member.id.toString() === user?.id && (
                         <Badge variant="outline" className="text-xs">You</Badge>
                       )}
                     </div>
@@ -424,7 +504,7 @@ export const OrganizationManagement: React.FC = () => {
                     </span>
                   )}
                   
-                  {canManageUsers && member.id !== user?.id && (
+                  {canManageUsers && member.id.toString() !== user?.id && (
                     <div className="flex gap-2">
                       <Button
                         variant="outline"

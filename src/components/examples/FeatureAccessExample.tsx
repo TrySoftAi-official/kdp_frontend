@@ -12,7 +12,7 @@ import {
   Zap
 } from 'lucide-react';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
 
 interface Feature {

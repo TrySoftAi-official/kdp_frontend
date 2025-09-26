@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 interface SubscriptionStatusCheckerProps {
   onStatusChange?: (status: any) => void;

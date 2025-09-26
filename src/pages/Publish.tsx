@@ -19,11 +19,8 @@ import {
   Edit,
   CloudCog
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { 
-  AdditionalService, 
-  DatabaseBook
-} from '@/api/additionalService';
+import { cn } from '@/utils/utils';
+import AdditionalService from '@/services/additionalService';
 
 
 interface BookForPublishing {
@@ -60,7 +57,7 @@ export const Publish: React.FC = () => {
         const response = await AdditionalService.getBooksFromDatabase();
         // Filter books with status "Uploaded" and map to BookForPublishing format
         const uploadedBooks = response.data.books
-          .filter(book => book.status === "Uploaded")
+          // .filter(book => book.status === "Uploaded")
           .map(book => ({
             id: book.id.toString(),
             title: book.book_title,
@@ -75,7 +72,7 @@ export const Publish: React.FC = () => {
               subtitle: '',
               description: book.description,
               keywords: book.keywords ? book.keywords.split(',') : [],
-              categories: [book.primary_category, book.secondary_category].filter(Boolean) as string[],
+              // categories: [book.primary_category, book.secondary_category].filter(Boolean) as string[],
               price: book.book_price,
               language: 'English',
               isbn: ''
@@ -382,7 +379,7 @@ export const Publish: React.FC = () => {
                         placeholder="keyword1, keyword2, keyword3..."
                         value={selectedBook.metadata?.keywords?.join(', ') || ''}
                         onChange={(e) => handleUpdateMetadata(selectedBook.id, { 
-                          keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
+                          // keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
                         })}
                       />
                     </div>

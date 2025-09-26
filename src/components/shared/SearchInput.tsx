@@ -2,8 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { debounce } from '@/lib/utils';
+import { cn } from '@/utils/utils';
+import { debounce } from '@/utils/utils';
 
 interface SearchInputProps {
   placeholder?: string;

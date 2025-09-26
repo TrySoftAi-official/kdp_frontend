@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePaymentApi } from './usePaymentApi';
-import { queryKeys } from '@/lib/queryClient';
+import { queryKeys } from '@/utils/queryClient';
 import { 
   CreateCheckoutSessionRequest,
   CreatePaymentIntentRequest,
   TaxCalculationRequest,
   PaymentRefundRequest
-} from '@/api/paymentService';
+} from '@/services/paymentService';
 
 export const usePaymentQuery = () => {
   const paymentApi = usePaymentApi();

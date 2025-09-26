@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { usePaymentApi } from './usePaymentApi';
-import { useAuth } from './useAuth';
-import { toast } from '@/lib/toast';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { toast } from '@/utils/toast';
 
 interface PaymentIntentData {
   amount: number;

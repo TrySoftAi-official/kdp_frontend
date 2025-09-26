@@ -1,17 +1,6 @@
-import { useState, useCallback } from 'react';
-import UserService, {
-  User,
-  UserUpdate,
-  PasswordUpdate,
-  UserStats,
-  UserPreferences,
-  UserActivity,
-  NotificationRequest,
-  MaintenanceStatus,
-  UserSubscription,
-} from '@/api/userService';
-import { getErrorMessage } from '@/api/client';
-import { AxiosError } from 'axios';
+import { useCallback } from 'react';
+import { useUser } from '@/redux/hooks/useUser';
+import { User, UserUpdate, PasswordUpdate, UserPreferences, UserActivity } from '@/apis/user';
 
 interface UseUserApiReturn {
   // State
@@ -24,334 +13,191 @@ interface UseUserApiReturn {
   updatePassword: (data: PasswordUpdate) => Promise<boolean>;
   deleteAccount: () => Promise<boolean>;
   
-  // User stats
-  getUserStats: () => Promise<UserStats | null>;
-  
   // User preferences
   getUserPreferences: () => Promise<UserPreferences | null>;
   updateUserPreferences: (data: Partial<UserPreferences>) => Promise<UserPreferences | null>;
   
   // User activity
-  getUserActivity: (limit?: number, offset?: number) => Promise<UserActivity[] | null>;
-  
-  // Notifications
-  sendNotification: (data: NotificationRequest) => Promise<boolean>;
-  
-  // System status
-  getMaintenanceStatus: () => Promise<MaintenanceStatus | null>;
-  
-  // Avatar management
-  uploadAvatar: (file: File) => Promise<string | null>;
-  deleteAvatar: () => Promise<boolean>;
-  
-  // Subscription management
-  getSubscription: () => Promise<UserSubscription | null>;
-  updateSubscription: (plan: string) => Promise<UserSubscription | null>;
-  cancelSubscription: () => Promise<boolean>;
-  reactivateSubscription: () => Promise<boolean>;
+  getUserActivity: (page?: number, limit?: number) => Promise<UserActivity[] | null>;
   
   // Utilities
   clearError: () => void;
-  getRoleLabel: (role: string) => string;
-  getRoleColor: (role: string) => string;
-  getStatusLabel: (status: boolean) => string;
-  getStatusColor: (status: boolean) => string;
-  getSubscriptionLabel: (plan: string) => string;
-  getSubscriptionColor: (plan: string) => string;
-  getSubscriptionStatusLabel: (status: string) => string;
-  getSubscriptionStatusColor: (status: string) => string;
   formatDate: (dateString: string) => string;
   formatCurrency: (amount: number, currency?: string) => string;
   formatNumber: (number: number) => string;
   formatPercentage: (value: number, decimals?: number) => string;
   calculateAccountAge: (createdAt: string) => number;
-  isSubscriptionActive: (subscription?: UserSubscription) => boolean;
-  canAccessFeature: (user: User, feature: string) => boolean;
-  getDefaultPreferences: () => UserPreferences;
   validatePassword: (password: string) => { isValid: boolean; errors: string[] };
   validateEmail: (email: string) => boolean;
   validateUsername: (username: string) => { isValid: boolean; errors: string[] };
 }
 
 export const useUserApi = (): UseUserApiReturn => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { 
+    profile, 
+    preferences, 
+    activity, 
+    isLoading, 
+    error, 
+    fetchProfile, 
+    updateProfile, 
+    changePassword, 
+    deleteAccount, 
+    fetchPreferences, 
+    updatePreferences, 
+    fetchActivity, 
+    clearError 
+  } = useUser();
 
-  // Clear error helper
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  // Get current user
+  // User profile functions
   const getCurrentUser = useCallback(async (): Promise<User | null> => {
-    setIsLoading(true);
-    setError(null);
-    
     try {
-      const response = await UserService.getCurrentUser();
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+      await fetchProfile();
+      return profile;
+    } catch (error) {
+      console.error('Failed to get current user:', error);
       return null;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [fetchProfile, profile]);
 
-  // Update profile
-  const updateProfile = useCallback(async (data: UserUpdate): Promise<User | null> => {
-    setIsLoading(true);
-    setError(null);
-    
+  const updateProfileData = useCallback(async (data: UserUpdate): Promise<User | null> => {
     try {
-      const response = await UserService.updateProfile(data);
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+      const result = await updateProfile(data);
+      return result.payload as User;
+    } catch (error) {
+      console.error('Failed to update profile:', error);
       return null;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [updateProfile]);
 
-  // Update password
-  const updatePassword = useCallback(async (data: PasswordUpdate): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    
+  const updatePasswordData = useCallback(async (data: PasswordUpdate): Promise<boolean> => {
     try {
-      await UserService.updatePassword(data);
+      await changePassword(data);
       return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+    } catch (error) {
+      console.error('Failed to update password:', error);
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [changePassword]);
 
-  // Delete account
-  const deleteAccount = useCallback(async (): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    
+  const deleteAccountData = useCallback(async (): Promise<boolean> => {
     try {
-      await UserService.deleteAccount();
+      await deleteAccount();
       return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+    } catch (error) {
+      console.error('Failed to delete account:', error);
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [deleteAccount]);
 
-  // Get user stats
-  const getUserStats = useCallback(async (): Promise<UserStats | null> => {
-    setIsLoading(true);
-    setError(null);
-    
+  // User preferences functions
+  const getUserPreferencesData = useCallback(async (): Promise<UserPreferences | null> => {
     try {
-      const response = await UserService.getUserStats();
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+      await fetchPreferences();
+      return preferences;
+    } catch (error) {
+      console.error('Failed to get user preferences:', error);
       return null;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [fetchPreferences, preferences]);
 
-  // Get user preferences
-  const getUserPreferences = useCallback(async (): Promise<UserPreferences | null> => {
-    setIsLoading(true);
-    setError(null);
-    
+  const updateUserPreferencesData = useCallback(async (data: Partial<UserPreferences>): Promise<UserPreferences | null> => {
     try {
-      const response = await UserService.getUserPreferences();
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+      const result = await updatePreferences(data);
+      return result.payload as UserPreferences;
+    } catch (error) {
+      console.error('Failed to update user preferences:', error);
       return null;
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [updatePreferences]);
 
-  // Update user preferences
-  const updateUserPreferences = useCallback(async (data: Partial<UserPreferences>): Promise<UserPreferences | null> => {
-    setIsLoading(true);
-    setError(null);
-    
+  // User activity functions
+  const getUserActivityData = useCallback(async (page: number = 1, limit: number = 10): Promise<UserActivity[] | null> => {
     try {
-      const response = await UserService.updateUserPreferences(data);
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
+      await fetchActivity({ page, limit });
+      return activity;
+    } catch (error) {
+      console.error('Failed to get user activity:', error);
       return null;
-    } finally {
-      setIsLoading(false);
     }
+  }, [fetchActivity, activity]);
+
+  // Utility functions
+  const formatDate = useCallback((dateString: string): string => {
+    return new Date(dateString).toLocaleDateString();
   }, []);
 
-  // Get user activity
-  const getUserActivity = useCallback(async (limit: number = 50, offset: number = 0): Promise<UserActivity[] | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await UserService.getUserActivity(limit, offset);
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
+  const formatCurrency = useCallback((amount: number, currency: string = 'USD'): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
   }, []);
 
-  // Send notification
-  const sendNotification = useCallback(async (data: NotificationRequest): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      await UserService.sendNotification(data);
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
+  const formatNumber = useCallback((number: number): string => {
+    return new Intl.NumberFormat('en-US').format(number);
   }, []);
 
-  // Get maintenance status
-  const getMaintenanceStatus = useCallback(async (): Promise<MaintenanceStatus | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await UserService.getMaintenanceStatus();
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
+  const formatPercentage = useCallback((value: number, decimals: number = 1): string => {
+    return `${(value * 100).toFixed(decimals)}%`;
   }, []);
 
-  // Upload avatar
-  const uploadAvatar = useCallback(async (file: File): Promise<string | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await UserService.uploadAvatar(file);
-      return response.data.avatar_url;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
+  const calculateAccountAge = useCallback((createdAt: string): number => {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - created.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // days
   }, []);
 
-  // Delete avatar
-  const deleteAvatar = useCallback(async (): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
+  const validatePassword = useCallback((password: string): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
     
-    try {
-      await UserService.deleteAvatar();
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
+    if (password.length < 8) {
+      errors.push('Password must be at least 8 characters long');
     }
+    
+    if (!/[A-Z]/.test(password)) {
+      errors.push('Password must contain at least one uppercase letter');
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      errors.push('Password must contain at least one lowercase letter');
+    }
+    
+    if (!/\d/.test(password)) {
+      errors.push('Password must contain at least one number');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }, []);
 
-  // Get subscription
-  const getSubscription = useCallback(async (): Promise<UserSubscription | null> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await UserService.getSubscription();
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
+  const validateEmail = useCallback((email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   }, []);
 
-  // Update subscription
-  const updateSubscription = useCallback(async (plan: string): Promise<UserSubscription | null> => {
-    setIsLoading(true);
-    setError(null);
+  const validateUsername = useCallback((username: string): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
     
-    try {
-      const response = await UserService.updateSubscription(plan);
-      return response.data;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return null;
-    } finally {
-      setIsLoading(false);
+    if (username.length < 3) {
+      errors.push('Username must be at least 3 characters long');
     }
-  }, []);
-
-  // Cancel subscription
-  const cancelSubscription = useCallback(async (): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
     
-    try {
-      await UserService.cancelSubscription();
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
+    if (username.length > 20) {
+      errors.push('Username must be no more than 20 characters long');
     }
-  }, []);
-
-  // Reactivate subscription
-  const reactivateSubscription = useCallback(async (): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
     
-    try {
-      await UserService.reactivateSubscription();
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof AxiosError ? getErrorMessage(err) : (err as Error).message;
-      setError(errorMessage);
-      return false;
-    } finally {
-      setIsLoading(false);
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      errors.push('Username can only contain letters, numbers, and underscores');
     }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }, []);
 
   return {
@@ -361,56 +207,26 @@ export const useUserApi = (): UseUserApiReturn => {
     
     // User profile
     getCurrentUser,
-    updateProfile,
-    updatePassword,
-    deleteAccount,
-    
-    // User stats
-    getUserStats,
+    updateProfile: updateProfileData,
+    updatePassword: updatePasswordData,
+    deleteAccount: deleteAccountData,
     
     // User preferences
-    getUserPreferences,
-    updateUserPreferences,
+    getUserPreferences: getUserPreferencesData,
+    updateUserPreferences: updateUserPreferencesData,
     
     // User activity
-    getUserActivity,
-    
-    // Notifications
-    sendNotification,
-    
-    // System status
-    getMaintenanceStatus,
-    
-    // Avatar management
-    uploadAvatar,
-    deleteAvatar,
-    
-    // Subscription management
-    getSubscription,
-    updateSubscription,
-    cancelSubscription,
-    reactivateSubscription,
+    getUserActivity: getUserActivityData,
     
     // Utilities
     clearError,
-    getRoleLabel: UserService.getRoleLabel,
-    getRoleColor: UserService.getRoleColor,
-    getStatusLabel: UserService.getStatusLabel,
-    getStatusColor: UserService.getStatusColor,
-    getSubscriptionLabel: UserService.getSubscriptionLabel,
-    getSubscriptionColor: UserService.getSubscriptionColor,
-    getSubscriptionStatusLabel: UserService.getSubscriptionStatusLabel,
-    getSubscriptionStatusColor: UserService.getSubscriptionStatusColor,
-    formatDate: UserService.formatDate,
-    formatCurrency: UserService.formatCurrency,
-    formatNumber: UserService.formatNumber,
-    formatPercentage: UserService.formatPercentage,
-    calculateAccountAge: UserService.calculateAccountAge,
-    isSubscriptionActive: UserService.isSubscriptionActive,
-    canAccessFeature: UserService.canAccessFeature,
-    getDefaultPreferences: UserService.getDefaultPreferences,
-    validatePassword: UserService.validatePassword,
-    validateEmail: UserService.validateEmail,
-    validateUsername: UserService.validateUsername,
+    formatDate,
+    formatCurrency,
+    formatNumber,
+    formatPercentage,
+    calculateAccountAge,
+    validatePassword,
+    validateEmail,
+    validateUsername
   };
 };

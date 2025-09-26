@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CreditCard, Smartphone, Check, AlertCircle, X } from 'lucide-react';
-import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { toast } from '@/utils/toast';
+import { cn } from '@/utils/utils';
 import { useStripePayment } from '@/hooks/useStripePayment';
-import { useAuth } from '@/hooks/useAuth';
-import { SubscriptionPlan } from '@/api/subscriptionService';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { SubscriptionPlan } from '@/services/subscriptionService';
 import { StripeProvider } from '@/components/providers/StripeProvider';
 import EnhancedStripePaymentForm from './EnhancedStripePaymentForm';
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PlanUpgradeModal } from '@/components/shared/PlanUpgradeModal';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { SubscriptionPlan } from '@/api/subscriptionService';
+import { SubscriptionPlan } from '@/apis/subscription';
 
 interface PlanUpgradeFlowProps {
   isOpen: boolean;

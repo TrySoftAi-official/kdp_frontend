@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { DateRange } from '@/types';
-import { DATE_RANGES } from '@/lib/constants';
+import { DATE_RANGES } from '@/utils/constants';
 
 interface DateRangePickerProps {
   value: DateRange;

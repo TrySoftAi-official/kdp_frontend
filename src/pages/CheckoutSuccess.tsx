@@ -1,27 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { toast } from '../lib/toast';
-import { SubscriptionService } from '../api/subscriptionService';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { toast } from '@/utils/toast';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { 
+  CheckCircle, 
+  Download, 
+  CreditCard, 
+  ArrowRight,
+  Sparkles,
+  Shield,
+  Clock
+} from 'lucide-react';
 
 const CheckoutSuccess: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const [syncingSubscription, setSyncingSubscription] = useState(false);
 
   useEffect(() => {
-    const plan = searchParams.get('plan');
-    const billing = searchParams.get('billing');
-    const amount = searchParams.get('amount');
-    const source = searchParams.get('source');
+    // Get data from location state (from embedded checkout) or URL params (from hosted checkout)
+    const stateData = location.state as any;
+    const plan = searchParams.get('plan') || stateData?.plan?.plan_id || stateData?.plan?.name;
+    const billing = searchParams.get('billing') || stateData?.billing;
+    const amount = searchParams.get('amount') || stateData?.amount;
+    const source = searchParams.get('source') || stateData?.source;
+    const paymentIntent = stateData?.paymentIntent;
 
-    if (plan && billing && amount) {
+    if (plan && billing && amount !== null) {
       setSubscriptionData({
         plan,
         billing,
-        amount: parseFloat(amount),
-        source
+        amount: parseFloat(amount.toString()),
+        source,
+        paymentIntent
       });
     }
 
@@ -31,7 +47,7 @@ const CheckoutSuccess: React.FC = () => {
     }
 
     setLoading(false);
-  }, [searchParams]);
+  }, [searchParams, location.state]);
 
   const syncSubscriptionFromStripe = async () => {
     try {
@@ -154,23 +170,25 @@ const CheckoutSuccess: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto px-4 py-16">
-        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+      <div className="max-w-4xl mx-auto px-4 py-16">
+        <div className="text-center mb-12">
           {/* Success Icon */}
-          <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
-            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+          <div className="mx-auto h-20 w-20 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center mb-6 shadow-lg">
+            <CheckCircle className="h-10 w-10 text-white" />
           </div>
 
           {/* Success Message */}
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Payment Successful!
           </h1>
-          <p className="text-lg text-gray-600 mb-8">
+          <p className="text-xl text-gray-600 mb-2">
             Your subscription has been activated successfully
           </p>
+          <p className="text-gray-500">
+            Welcome to your new plan! You now have access to all premium features.
+          </p>
+        </div>
 
           {/* Syncing Indicator */}
           {syncingSubscription && (
@@ -182,87 +200,105 @@ const CheckoutSuccess: React.FC = () => {
             </div>
           )}
 
-          {/* Subscription Details */}
-          {subscriptionData && (
-            <div className="bg-gray-50 rounded-lg p-6 mb-8 text-left">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Subscription Details:
-              </h2>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Plan:</span>
-                  <span className="font-medium text-gray-900">
-                    {getPlanDisplayName(subscriptionData.plan)}
-                  </span>
+        {/* Subscription Details */}
+        {subscriptionData && (
+          <Card className="mb-8 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Subscription Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Plan</span>
+                    <Badge className="bg-blue-100 text-blue-800">
+                      {getPlanDisplayName(subscriptionData.plan)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Billing Cycle</span>
+                    <span className="font-medium text-gray-900 capitalize">
+                      {subscriptionData.billing}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Billing Cycle:</span>
-                  <span className="font-medium text-gray-900 capitalize">
-                    {subscriptionData.billing}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Amount:</span>
-                  <span className="font-medium text-gray-900">
-                    ${subscriptionData.amount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Status:</span>
-                  <span className="font-medium text-green-600">Active</span>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Amount</span>
+                    <span className="font-bold text-lg text-gray-900">
+                      ${subscriptionData.amount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Status</span>
+                    <Badge className="bg-green-100 text-green-800">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Active
+                    </Badge>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            </CardContent>
+          </Card>
+        )}
 
-          {/* What's Next */}
-          <div className="bg-blue-50 rounded-lg p-6 mb-8 text-left">
-            <h3 className="text-lg font-semibold text-blue-900 mb-3">
+        {/* What's Next */}
+        <Card className="mb-8 shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-900">
+              <Sparkles className="h-5 w-5" />
               What's Next?
-            </h3>
-            <ul className="space-y-2 text-blue-800">
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                Your subscription is now active
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                You have access to all plan features
-              </li>
-              <li className="flex items-center">
-                <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                Billing will be automatic going forward
-              </li>
-            </ul>
-          </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <h4 className="font-semibold text-green-900 mb-1">Subscription Active</h4>
+                <p className="text-sm text-green-700">Your plan is now active and ready to use</p>
+              </div>
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <Shield className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                <h4 className="font-semibold text-blue-900 mb-1">Full Access</h4>
+                <p className="text-sm text-blue-700">You have access to all premium features</p>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-lg">
+                <Clock className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                <h4 className="font-semibold text-purple-900 mb-1">Auto Billing</h4>
+                <p className="text-sm text-purple-700">Billing will be automatic going forward</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={handleGoToSubscription}
-              className="bg-blue-600 text-white px-6 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors"
-            >
-              Go to My Subscription
-            </button>
-            <button
-              onClick={handleDownloadReceipt}
-              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-md font-medium hover:bg-gray-200 transition-colors"
-            >
-              Download Receipt
-            </button>
-            <button
-              onClick={handleManageBilling}
-              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-md font-medium hover:bg-gray-200 transition-colors"
-            >
-              Manage Billing
-            </button>
-          </div>
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button
+            onClick={handleGoToSubscription}
+            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 text-lg font-semibold"
+          >
+            <ArrowRight className="h-5 w-5 mr-2" />
+            Go to My Subscription
+          </Button>
+          <Button
+            onClick={handleDownloadReceipt}
+            variant="outline"
+            className="px-8 py-3 text-lg font-semibold"
+          >
+            <Download className="h-5 w-5 mr-2" />
+            Download Receipt
+          </Button>
+          <Button
+            onClick={handleManageBilling}
+            variant="outline"
+            className="px-8 py-3 text-lg font-semibold"
+          >
+            <CreditCard className="h-5 w-5 mr-2" />
+            Manage Billing
+          </Button>
         </div>
       </div>
     </div>

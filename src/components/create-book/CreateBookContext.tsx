@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { CreateBookContextType, BookPrompt } from './types';
 
 const CreateBookContext = createContext<CreateBookContextType | undefined>(undefined);

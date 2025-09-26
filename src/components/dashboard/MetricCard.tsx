@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Metric } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils';
 
 interface MetricCardProps {
   metric: Metric;

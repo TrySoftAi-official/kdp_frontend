@@ -10,7 +10,7 @@ import {
   Copy,
   Mail
 } from 'lucide-react';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 interface Props {
   children: ReactNode;

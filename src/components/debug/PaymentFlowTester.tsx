@@ -23,10 +23,10 @@ import {
   Copy,
   RefreshCw
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { usePaymentApi } from '@/hooks/usePaymentApi';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 interface TestStep {
   name: string;
@@ -38,7 +38,7 @@ interface TestStep {
 
 export const PaymentFlowTester: React.FC = () => {
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
+  const { fetchPlans } = useSubscription();
   const paymentApi = usePaymentApi();
   
   const [testSteps, setTestSteps] = useState<TestStep[]>([]);
@@ -57,7 +57,7 @@ export const PaymentFlowTester: React.FC = () => {
 
   const loadPlans = async () => {
     try {
-      const response = await subscriptionApi.getSubscriptionPlans();
+      const response = await fetchPlans();
       if (response?.data?.plans) {
         setAvailablePlans(response.data.plans);
         if (response.data.plans.length > 0) {

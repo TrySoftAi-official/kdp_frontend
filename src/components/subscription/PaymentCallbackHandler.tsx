@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { usePaymentApi } from '@/hooks/usePaymentApi';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface PaymentCallbackHandlerProps {
@@ -22,7 +22,7 @@ export const PaymentCallbackHandler: React.FC<PaymentCallbackHandlerProps> = ({
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const subscriptionApi = useSubscriptionApi();
+  const { fetchCurrent, fetchStatus } = useSubscription();
   const paymentApi = usePaymentApi();
   
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'cancelled'>('loading');
@@ -46,7 +46,7 @@ export const PaymentCallbackHandler: React.FC<PaymentCallbackHandlerProps> = ({
         
         // Refresh subscription data
         setIsRefreshing(true);
-        await subscriptionApi.getMySubscription();
+        await fetchCurrent();
         setIsRefreshing(false);
         
         toast.success('Payment successful! Your subscription has been activated.');

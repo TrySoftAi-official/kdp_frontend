@@ -5,17 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useDynamicApi } from '@/hooks/useDynamicApi';
 import { useApi } from '@/hooks/useApi';
-import { toast } from '@/lib/toast';
-import { 
-  AdditionalService, 
-  DatabaseBook
-} from '@/api/additionalService';
+import { toast } from '@/utils/toast';
+import AdditionalService from '@/services/additionalService';
 
 export const Books: React.FC = () => {
   const [limit] = useState(12);
 
   // Database books states - now the primary source
-  const [databaseBooks, setDatabaseBooks] = useState<DatabaseBook[]>([]);
+  const [databaseBooks, setDatabaseBooks] = useState<any[]>([]);
   const [isLoadingDatabaseBooks, setIsLoadingDatabaseBooks] = useState(false);
   const [databaseBooksError, setDatabaseBooksError] = useState<string | null>(null);
 
@@ -29,14 +26,12 @@ export const Books: React.FC = () => {
     enableSuccessNotifications: true
   });
 
-  // Get real-time data using React Query hooks (keeping for potential future use)
+  // Get real-time data using React Query hooks
   const { books: booksHooks } = useApi();
-  booksHooks.useBooks(1, limit, {}, { field: 'createdAt', direction: 'desc' });
+  const booksQuery = booksHooks.useBooks(1, limit, {}, { field: 'createdAt', direction: 'desc' });
 
   // Auto-load database books on component mount
-  useEffect(() => {
-    handleFetchDatabaseBooks();
-  }, []);
+  
 
   // Auto-refresh database books every 30 seconds
   useEffect(() => {
@@ -49,6 +44,16 @@ export const Books: React.FC = () => {
 
   // Display all books without filtering
   const filteredBooks = databaseBooks;
+
+  // Debug logging
+  console.log('🔍 Books component state:', {
+    databaseBooks: databaseBooks.length,
+    isLoadingDatabaseBooks,
+    databaseBooksError,
+    booksQueryLoading: booksQuery.isLoading,
+    booksQueryError: booksQuery.error,
+    booksQueryData: booksQuery.data
+  });
 
   const getStatusColor = (status: string) => {
     const normalizedStatus = status.toLowerCase();
@@ -79,20 +84,36 @@ export const Books: React.FC = () => {
   };
 
   const handleFetchDatabaseBooks = async () => {
+    console.log('🔄 Starting to fetch books...');
     setIsLoadingDatabaseBooks(true);
     setDatabaseBooksError(null);
     try {
-      const response = await AdditionalService.getBooksFromDatabase();
-      console.log('API Response:', response.data);
-      console.log('Books array:', response.data.books);
-      console.log('Books count:', response.data.books?.length);
+      // Try the main books API first using React Query
+      console.log('📡 Attempting to fetch from main API...');
+      const response = await booksQuery.refetch();
+      console.log('Main API Response:', response.data);
+      
+      if (response.data?.books) {
       setDatabaseBooks(response.data.books);
-      toast.success(`Loaded ${response.data.books.length} books from database`);
+        toast.success(`Loaded ${response.data.books.length} books from main API`);
+      } else {
+        // Fallback to additional service
+        console.log('📡 Main API failed, trying fallback API...');
+        const fallbackResponse = await AdditionalService.getBooksFromDatabase();
+        console.log('Fallback API Response:', fallbackResponse.data);
+        
+        // Handle different response structures
+        const responseData = fallbackResponse.data as any;
+        const books = responseData?.books || responseData || [];
+        setDatabaseBooks(Array.isArray(books) ? books : []);
+        toast.success(`Loaded ${Array.isArray(books) ? books.length : 0} books from fallback API`);
+      }
     } catch (error) {
-      console.error('Error fetching database books:', error);
-      setDatabaseBooksError('Failed to fetch books from database');
-      toast.error('Failed to fetch books from database');
+      console.error('❌ Error fetching books:', error);
+      setDatabaseBooksError('Failed to fetch books from API');
+      toast.error('Failed to fetch books from API');
     } finally {
+      console.log('✅ Finished fetching books');
       setIsLoadingDatabaseBooks(false);
     }
   };
@@ -109,9 +130,9 @@ export const Books: React.FC = () => {
           <Button 
             variant="outline" 
             onClick={handleFetchDatabaseBooks}
-            disabled={isLoadingDatabaseBooks}
+            disabled={isLoadingDatabaseBooks || booksQuery.isLoading}
           >
-            {isLoadingDatabaseBooks ? (
+            {(isLoadingDatabaseBooks || booksQuery.isLoading) ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -141,8 +162,16 @@ export const Books: React.FC = () => {
               size="sm" 
               className="mt-2"
               onClick={handleFetchDatabaseBooks}
+              disabled={isLoadingDatabaseBooks || booksQuery.isLoading}
             >
-              Retry
+              {(isLoadingDatabaseBooks || booksQuery.isLoading) ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Retrying...
+                </>
+              ) : (
+                'Retry'
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -219,7 +248,7 @@ export const Books: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoadingDatabaseBooks ? (
+          {(isLoadingDatabaseBooks || booksQuery.isLoading) ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="h-64 bg-muted rounded-lg animate-pulse" />
@@ -228,7 +257,7 @@ export const Books: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredBooks.map((book) => {
-                const dbBook = book as DatabaseBook;
+                const dbBook = book as any;
                 return (
                   <Card key={dbBook.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                     <div className="relative">
@@ -308,8 +337,8 @@ export const Books: React.FC = () => {
                 No books found in database. Click "Refresh" to fetch books.
               </p>
               {databaseBooks.length === 0 && (
-                <Button onClick={handleFetchDatabaseBooks} disabled={isLoadingDatabaseBooks}>
-                  {isLoadingDatabaseBooks ? (
+                <Button onClick={handleFetchDatabaseBooks} disabled={isLoadingDatabaseBooks || booksQuery.isLoading}>
+                  {(isLoadingDatabaseBooks || booksQuery.isLoading) ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Loading...
@@ -317,7 +346,7 @@ export const Books: React.FC = () => {
                   ) : (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Load Database Books
+                      Load Books
                     </>
                   )}
                 </Button>

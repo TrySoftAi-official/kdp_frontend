@@ -1,10 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useAuth } from './useAuth';
-import { useSubscriptionApi } from './useSubscriptionApi';
-import { usePaymentApi } from './usePaymentApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
-import { toast } from '@/lib/toast';
-import { SubscriptionPlan, UserSubscriptionWithPlanResponse, SubscriptionStatus } from '@/api/subscriptionService';
+import { toast } from '@/utils/toast';
+import { SubscriptionPlan, UserSubscriptionWithPlanResponse, SubscriptionStatus } from '@/apis/subscription';
 
 interface SubscriptionIntegrationState {
   subscriptionData: UserSubscriptionWithPlanResponse | null;
@@ -57,44 +56,54 @@ interface UseSubscriptionIntegrationReturn {
 export const useSubscriptionIntegration = (): UseSubscriptionIntegrationReturn => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const subscriptionApi = useSubscriptionApi();
-  const paymentApi = usePaymentApi();
+  const { 
+    currentSubscription, 
+    subscriptionStatus, 
+    isLoading, 
+    isUpgrading,
+    isCancelling,
+    fetchCurrent,
+    fetchStatus,
+    upgrade,
+    cancel
+  } = useSubscription();
   
   const [state, setState] = useState<SubscriptionIntegrationState>({
-    subscriptionData: null,
-    subscriptionStatus: null,
-    isLoading: false,
-    isProcessing: false,
+    subscriptionData: currentSubscription,
+    subscriptionStatus: subscriptionStatus,
+    isLoading: isLoading,
+    isProcessing: isUpgrading || isCancelling,
     error: null
   });
+  
+  // Update state when Redux state changes
+  useEffect(() => {
+    setState({
+      subscriptionData: currentSubscription,
+      subscriptionStatus: subscriptionStatus,
+      isLoading: isLoading,
+      isProcessing: isUpgrading || isCancelling,
+      error: null
+    });
+  }, [currentSubscription, subscriptionStatus, isLoading, isUpgrading, isCancelling]);
 
   // Load subscription data
   const loadSubscriptionData = useCallback(async () => {
     if (!user) return;
     
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-    
     try {
-      const [statusData, subscriptionData] = await Promise.all([
-        subscriptionApi.getMySubscriptionStatus(),
-        subscriptionApi.getMySubscription()
+      await Promise.all([
+        fetchStatus(),
+        fetchCurrent()
       ]);
-      
-      setState(prev => ({
-        ...prev,
-        subscriptionStatus: statusData,
-        subscriptionData: subscriptionData,
-        isLoading: false
-      }));
     } catch (error) {
       console.error('Failed to load subscription data:', error);
       setState(prev => ({
         ...prev,
-        isLoading: false,
         error: 'Failed to load subscription data'
       }));
     }
-  }, [user, subscriptionApi]);
+  }, [user, fetchStatus, fetchCurrent]);
 
   // Refresh subscription data
   const refreshSubscriptionData = useCallback(async () => {
@@ -116,95 +125,52 @@ export const useSubscriptionIntegration = (): UseSubscriptionIntegrationReturn =
       return false;
     }
 
-    setState(prev => ({ ...prev, isProcessing: true, error: null }));
-
     try {
-      const checkoutData = {
-        amount: plan.price,
-        currency: 'USD',
-        customer_email: user.email,
-        customer_name: user.name || user.username,
-        description: `${plan.name} Subscription - ${billingCycle}`,
-        success_url: `${window.location.origin}/subscription?subscription=success&plan=${plan.plan_id}`,
-        cancel_url: `${window.location.origin}/subscription?subscription=cancelled`,
-        line_items: [{
-          product_name: plan.name,
-          product_description: plan.description || `${plan.name} subscription plan`,
-          quantity: 1,
-          unit_amount: paymentApi.convertToCents(plan.price),
-          tax_amount: 0,
-          tax_rate: 0
-        }],
-        metadata: {
-          plan_id: plan.plan_id,
-          billing_cycle: billingCycle,
-          user_id: user.id,
-          plan_name: plan.name
-        },
-        payment_method_types: ['card'],
-        idempotency_key: paymentApi.generateIdempotencyKey()
-      };
+      const result = await upgrade({
+        new_plan: plan.plan_id,
+        billing_cycle: billingCycle,
+        immediate: false
+      });
 
-      const checkoutSession = await paymentApi.createCheckoutSession(checkoutData);
-      
-      if (checkoutSession && checkoutSession.url) {
-        window.location.href = checkoutSession.url;
+      if (result.type.endsWith('/fulfilled')) {
+        toast.success('Subscription upgraded successfully!');
         return true;
       } else {
-        throw new Error('Failed to create checkout session');
+        toast.error('Failed to upgrade subscription');
+        return false;
       }
     } catch (error) {
       console.error('Upgrade error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to upgrade subscription';
-      
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        error: errorMessage
-      }));
-
       toast.error(errorMessage);
       return false;
     }
-  }, [user, paymentApi]);
+  }, [user, upgrade]);
 
   // Cancel subscription
   const cancelSubscription = useCallback(async (reason?: string): Promise<boolean> => {
-    if (!state.subscriptionData?.subscription) {
+    if (!currentSubscription?.subscription) {
       toast.error('No active subscription to cancel');
       return false;
     }
 
-    setState(prev => ({ ...prev, isProcessing: true, error: null }));
-
     try {
-      const result = await subscriptionApi.cancelSubscription({
-        cancel_at_period_end: true,
-        cancellation_reason: reason || 'User requested cancellation',
-        feedback: 'Cancelled via subscription management'
-      });
+      const result = await cancel(false); // Don't cancel immediately
 
-      if (result) {
+      if (result.type.endsWith('/fulfilled')) {
         toast.success('Subscription cancelled successfully. You will retain access until the end of your billing period.');
-        await refreshSubscriptionData();
         return true;
       } else {
-        throw new Error('Failed to cancel subscription');
+        toast.error('Failed to cancel subscription');
+        return false;
       }
     } catch (error) {
       console.error('Cancel subscription error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to cancel subscription';
-      
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        error: errorMessage
-      }));
-
       toast.error(errorMessage);
       return false;
     }
-  }, [state.subscriptionData, subscriptionApi, refreshSubscriptionData]);
+  }, [currentSubscription, cancel]);
 
   // Reactivate subscription
   const reactivateSubscription = useCallback(async (): Promise<boolean> => {
@@ -215,50 +181,51 @@ export const useSubscriptionIntegration = (): UseSubscriptionIntegrationReturn =
 
   // Check usage limit
   const checkUsageLimit = useCallback(async (usageType: string, increment: boolean = false): Promise<boolean> => {
-    try {
-      const result = await subscriptionApi.checkUsageLimits({
-        usage_type: usageType,
-        increment
-      });
-
-      return result?.can_use || false;
-    } catch (error) {
-      console.error('Usage limit check error:', error);
-      return false;
-    }
-  }, [subscriptionApi]);
+    if (!subscriptionStatus?.usage) return false;
+    
+    const usage = subscriptionStatus.usage[usageType];
+    const limit = subscriptionStatus.plan?.limits?.[usageType];
+    
+    if (!limit || limit === -1) return true; // Unlimited
+    return usage < limit;
+  }, [subscriptionStatus]);
 
   // Get usage percentage
   const getUsagePercentage = useCallback((usageType: string): number => {
-    if (!state.subscriptionData?.subscription || !state.subscriptionStatus?.plan?.limits) {
+    if (!currentSubscription?.usage || !subscriptionStatus?.plan?.limits) {
       return 0;
     }
 
-    const currentUsage = state.subscriptionData.subscription.books_created_this_period;
-    const limit = state.subscriptionStatus.plan.limits.books_per_month;
+    const currentUsage = currentSubscription.usage[usageType] || 0;
+    const limit = subscriptionStatus.plan.limits[usageType];
 
     if (!limit || limit === -1) return 0; // Unlimited
     return Math.min((currentUsage / limit) * 100, 100);
-  }, [state.subscriptionData, state.subscriptionStatus]);
+  }, [currentSubscription, subscriptionStatus]);
 
   // Check if user can perform an action
   const canPerformAction = useCallback(async (action: string): Promise<boolean> => {
-    try {
-      const result = await subscriptionApi.validateSubscriptionAccess(action);
-      return result?.can_perform || false;
-    } catch (error) {
-      console.error('Action validation error:', error);
-      return false;
+    // Simple action validation based on subscription status
+    if (!subscriptionStatus) return false;
+    
+    // Basic action checks
+    switch (action) {
+      case 'create_book':
+        return subscriptionStatus.has_subscription;
+      case 'access_analytics':
+        return subscriptionStatus.plan?.plan_id === 'pro' || subscriptionStatus.plan?.plan_id === 'enterprise';
+      default:
+        return subscriptionStatus.has_subscription;
     }
-  }, [subscriptionApi]);
+  }, [subscriptionStatus]);
 
   // Check if user has a feature
   const hasFeature = useCallback((feature: string): boolean => {
-    if (!state.subscriptionStatus?.plan?.limits) return false;
+    if (!subscriptionStatus?.plan?.limits) return false;
     
-    const limits = state.subscriptionStatus.plan.limits;
+    const limits = subscriptionStatus.plan.limits;
     return limits[feature as keyof typeof limits] === true;
-  }, [state.subscriptionStatus]);
+  }, [subscriptionStatus]);
 
   // Check if user can access a feature
   const canAccessFeature = useCallback((feature: string): boolean => {
@@ -267,25 +234,25 @@ export const useSubscriptionIntegration = (): UseSubscriptionIntegrationReturn =
 
   // Get current plan
   const getCurrentPlan = useCallback((): SubscriptionPlan | null => {
-    return state.subscriptionStatus?.plan || null;
-  }, [state.subscriptionStatus]);
+    return subscriptionStatus?.plan || null;
+  }, [subscriptionStatus]);
 
   // Check if on free plan
   const isOnFreePlan = useCallback((): boolean => {
-    return !state.subscriptionStatus?.has_subscription || 
-           state.subscriptionStatus?.plan?.plan_id === 'free';
-  }, [state.subscriptionStatus]);
+    return !subscriptionStatus?.has_subscription || 
+           subscriptionStatus?.plan?.plan_id === 'free';
+  }, [subscriptionStatus]);
 
   // Check if on paid plan
   const isOnPaidPlan = useCallback((): boolean => {
-    return state.subscriptionStatus?.has_subscription && 
-           state.subscriptionStatus?.plan?.plan_id !== 'free';
-  }, [state.subscriptionStatus]);
+    return subscriptionStatus?.has_subscription && 
+           subscriptionStatus?.plan?.plan_id !== 'free';
+  }, [subscriptionStatus]);
 
   // Check if subscription is active
   const isSubscriptionActive = useCallback((): boolean => {
-    return state.subscriptionStatus?.status === 'active';
-  }, [state.subscriptionStatus]);
+    return subscriptionStatus?.status === 'active';
+  }, [subscriptionStatus]);
 
   // Show upgrade modal
   const showUpgradeModal = useCallback(() => {
@@ -305,20 +272,33 @@ export const useSubscriptionIntegration = (): UseSubscriptionIntegrationReturn =
 
   // Utility functions
   const formatCurrency = useCallback((amount: number, currency: string = 'USD'): string => {
-    return subscriptionApi.formatCurrency(amount, currency);
-  }, [subscriptionApi]);
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  }, []);
 
   const formatDate = useCallback((dateString: string): string => {
-    return subscriptionApi.formatDate(dateString);
-  }, [subscriptionApi]);
+    return new Date(dateString).toLocaleDateString();
+  }, []);
 
   const getStatusColor = useCallback((status: string): string => {
-    return subscriptionApi.getStatusColor(status);
-  }, [subscriptionApi]);
+    switch (status.toLowerCase()) {
+      case 'active': return 'text-green-600 bg-green-100';
+      case 'cancelled': return 'text-red-600 bg-red-100';
+      case 'past_due': return 'text-yellow-600 bg-yellow-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  }, []);
 
   const getStatusLabel = useCallback((status: string): string => {
-    return subscriptionApi.getStatusLabel(status);
-  }, [subscriptionApi]);
+    switch (status.toLowerCase()) {
+      case 'active': return 'Active';
+      case 'cancelled': return 'Cancelled';
+      case 'past_due': return 'Past Due';
+      default: return 'Unknown';
+    }
+  }, []);
 
   // Load data on mount
   useEffect(() => {

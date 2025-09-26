@@ -15,9 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { toast } from '@/lib/toast';
-import { UserSubscriptionWithPlanResponse } from '@/api/subscriptionService';
+import { useSubscription } from '@/redux/hooks/useSubscription';
+import { toast } from '@/utils/toast';
+import { UserSubscriptionWithPlanResponse } from '@/apis/subscription';
 
 interface MySubscriptionProps {
   onUpgrade?: () => void;
@@ -28,7 +28,7 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
   onUpgrade,
   onCancel
 }) => {
-  const subscriptionApi = useSubscriptionApi();
+  const { currentSubscription, fetchCurrent } = useSubscription();
   
   const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -188,7 +188,10 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
             <p className="text-muted-foreground mb-4">
               You're currently on the free plan. Upgrade to unlock premium features.
             </p>
-            <Button onClick={onUpgrade}>
+            <Button onClick={() => {
+              console.log('View Plans clicked - showing plans modal');
+              onUpgrade?.();
+            }}>
               View Plans
             </Button>
           </div>
@@ -201,9 +204,10 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
   const isActive = subscription?.status === 'active';
   const isCancelled = subscription?.status === 'cancelled';
   const isPastDue = subscription?.status === 'past_due';
+  const isFreePlan = !subscription && plan?.plan_id === 'free';
 
-  // If no subscription data, show the no subscription state
-  if (!subscriptionData || !subscriptionData.subscription || !subscriptionData.plan) {
+  // If no subscription data or plan data, show the no subscription state
+  if (!subscriptionData || !subscriptionData.plan) {
     return (
       <Card>
         <CardHeader>
@@ -219,7 +223,10 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
             <p className="text-muted-foreground mb-4">
               You're currently on the free plan. Upgrade to unlock premium features.
             </p>
-            <Button onClick={onUpgrade}>
+            <Button onClick={() => {
+              console.log('View Plans clicked - showing plans modal');
+              onUpgrade?.();
+            }}>
               View Plans
             </Button>
           </div>
@@ -253,10 +260,10 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
             <div className="text-2xl font-bold">
               {formatCurrency(plan?.price || 0)}/{subscription?.billing_cycle || 'month'}
             </div>
-            <Badge className={getStatusColor(subscription?.status || 'free')}>
+            <Badge className={getStatusColor(isFreePlan ? 'active' : (subscription?.status || 'free'))}>
               <div className="flex items-center gap-1">
-                {getStatusIcon(subscription?.status || 'free')}
-                {subscriptionApi.getStatusLabel(subscription?.status || 'free')}
+                {getStatusIcon(isFreePlan ? 'active' : (subscription?.status || 'free'))}
+                {isFreePlan ? 'Active (Free Plan)' : subscriptionApi.getStatusLabel(subscription?.status || 'free')}
               </div>
             </Badge>
           </div>
@@ -267,17 +274,19 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
           <div>
             <label className="text-sm font-medium text-muted-foreground">Current Period</label>
             <p className="text-sm">
-              {subscription?.current_period_start && subscription?.current_period_end ? 
-                `${formatDate(subscription.current_period_start)} - ${formatDate(subscription.current_period_end)}` :
-                'No active subscription'
+              {isFreePlan ? 'Free plan - no billing period' :
+                subscription?.current_period_start && subscription?.current_period_end ? 
+                  `${formatDate(subscription.current_period_start)} - ${formatDate(subscription.current_period_end)}` :
+                  'No active subscription'
               }
             </p>
           </div>
           <div>
             <label className="text-sm font-medium text-muted-foreground">Next Billing Date</label>
             <p className="text-sm">
-              {isCancelled ? 'No future billing' : 
-                subscription?.current_period_end ? formatDate(subscription.current_period_end) : 'No active subscription'
+              {isFreePlan ? 'No billing required' :
+                isCancelled ? 'No future billing' : 
+                  subscription?.current_period_end ? formatDate(subscription.current_period_end) : 'No active subscription'
               }
             </p>
           </div>
@@ -365,7 +374,10 @@ export const MySubscription: React.FC<MySubscriptionProps> = ({
         {/* Actions */}
         <div className="flex flex-wrap gap-3 pt-4 border-t">
           {!isCancelled && (
-            <Button variant="outline" onClick={onUpgrade}>
+            <Button variant="outline" onClick={() => {
+              console.log('Change Plan clicked - showing plans modal');
+              onUpgrade?.();
+            }}>
               <Settings className="h-4 w-4 mr-2" />
               Change Plan
             </Button>

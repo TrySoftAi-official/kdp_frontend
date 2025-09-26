@@ -4,10 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { usePaymentApi } from '@/hooks/usePaymentApi';
-import { toast } from '@/lib/toast';
-import { SubscriptionBilling } from '@/api/subscriptionService';
+import { useSubscription } from '@/redux/hooks/useSubscription';
+import { toast } from '@/utils/toast';
+import { SubscriptionBilling } from '@/apis/subscription';
 
 interface BillingHistoryProps {
   limit?: number;
@@ -18,33 +17,32 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
   limit = 10,
   showHeader = true
 }) => {
-  const subscriptionApi = useSubscriptionApi();
-  const paymentApi = usePaymentApi();
+  const { 
+    billingHistory, 
+    currentSubscription,
+    fetchBilling, 
+    isLoading 
+  } = useSubscription();
   
-  const [billingHistory, setBillingHistory] = useState<SubscriptionBilling[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<SubscriptionBilling | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
-    loadBillingHistory();
-  }, [limit]);
+    // Load billing history if user has an active subscription
+    const hasActiveSubscription = currentSubscription?.subscription?.status === 'active' || 
+                                 currentSubscription?.subscription?.status === 'trialing';
+    
+    if (hasActiveSubscription) {
+      loadBillingHistory();
+    }
+  }, [limit, currentSubscription]);
 
   const loadBillingHistory = async () => {
-    setIsLoading(true);
     try {
-      const history = await subscriptionApi.getBillingHistory(limit);
-      if (history && Array.isArray(history)) {
-        setBillingHistory(history);
-      } else {
-        setBillingHistory([]);
-      }
+      await fetchBilling(limit);
     } catch (error) {
       console.error('Failed to load billing history:', error);
-      toast.error('Failed to load billing history');
-      setBillingHistory([]);
-    } finally {
-      setIsLoading(false);
+      // Don't show error toast for billing history - it's not critical
     }
   };
 
@@ -53,7 +51,7 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
     setShowDetailsModal(true);
   };
 
-  const handleDownloadInvoice = async (transaction: SubscriptionBilling) => {
+  const handleDownloadInvoice = async (_transaction: SubscriptionBilling) => {
     try {
       // This would typically call an API to generate and download the invoice
       toast.info('Invoice download feature coming soon');
@@ -180,16 +178,16 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            {formatDate(transaction.created_at)}
+                            {formatDate(transaction.billing_period_start)}
                           </div>
                         </TableCell>
                         <TableCell>
                           <div>
                             <div className="font-medium">
-                              {transaction.billing_metadata?.plan_name || 'Subscription Payment'}
+                              {transaction.description || 'Subscription Payment'}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {transaction.billing_metadata?.billing_cycle || 'Monthly billing'}
+                              Monthly billing
                             </div>
                           </div>
                         </TableCell>
@@ -237,10 +235,10 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h4 className="font-medium">
-                          {transaction.billing_metadata?.plan_name || 'Subscription Payment'}
+                          {transaction.description || 'Subscription Payment'}
                         </h4>
                         <p className="text-sm text-muted-foreground">
-                          {formatDate(transaction.created_at)}
+                          {formatDate(transaction.billing_period_start)}
                         </p>
                       </div>
                       <Badge className={getStatusColor(transaction.payment_status)}>
@@ -302,7 +300,7 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Date</label>
-                  <p>{formatDate(selectedTransaction.created_at)}</p>
+                  <p>{formatDate(selectedTransaction.billing_period_start)}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Amount</label>
@@ -319,19 +317,6 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
                 </div>
               </div>
 
-              {selectedTransaction.stripe_invoice_id && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Stripe Invoice ID</label>
-                  <p className="font-mono text-sm">{selectedTransaction.stripe_invoice_id}</p>
-                </div>
-              )}
-
-              {selectedTransaction.stripe_payment_intent_id && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Payment Intent ID</label>
-                  <p className="font-mono text-sm">{selectedTransaction.stripe_payment_intent_id}</p>
-                </div>
-              )}
 
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Billing Period</label>
@@ -347,16 +332,6 @@ export const BillingHistory: React.FC<BillingHistoryProps> = ({
                 </div>
               )}
 
-              {selectedTransaction.billing_metadata && Object.keys(selectedTransaction.billing_metadata).length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Additional Details</label>
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                    <pre className="text-sm whitespace-pre-wrap">
-                      {JSON.stringify(selectedTransaction.billing_metadata, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="p-6 border-t bg-gray-50">

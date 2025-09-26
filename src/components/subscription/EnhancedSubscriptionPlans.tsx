@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Check, Star, Zap, Crown, Building2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { SubscriptionPlan } from '@/api/subscriptionService';
+import { cn } from '@/utils/utils';
+import { SubscriptionPlan } from '@/services/subscriptionService';
 import PaymentFlowModal from '@/components/payment/PaymentFlowModal';
 
 interface EnhancedSubscriptionPlansProps {

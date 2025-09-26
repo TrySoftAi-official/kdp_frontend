@@ -6,12 +6,12 @@ import { RevenueChart } from '@/components/analytics/RevenueChart';
 import { ROASChart } from '@/components/analytics/ROASChart';
 import { BooksTable } from '@/components/analytics/BooksTable';
 import { DateRange, ChartData } from '@/types';
-import { analyticsApi } from '@/lib/api';
-import { useUIStore } from '@/stores/uiStore';
+import { analyticsApi } from '@/utils/api';
+import { useUI } from '@/redux/hooks/useUI';
 import { RoleBased } from '@/components/shared/RoleBased';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 export const Analytics: React.FC = () => {
   const { user } = useAuth();
@@ -19,7 +19,7 @@ export const Analytics: React.FC = () => {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const { addNotification } = useUIStore();
+  const { addNotification } = useUI();
 
   // Check if user needs to upgrade
   useEffect(() => {

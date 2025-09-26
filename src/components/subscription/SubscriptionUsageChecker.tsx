@@ -15,13 +15,13 @@ import {
   Shield,
   Settings
 } from 'lucide-react';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { 
   SubscriptionUsageCheckRequest,
   SubscriptionUsageCheckResponse,
   UserSubscriptionWithPlanResponse 
-} from '@/api/subscriptionService';
-import { toast } from '@/lib/toast';
+} from '@/apis/subscription';
+import { toast } from '@/utils/toast';
 
 interface SubscriptionUsageCheckerProps {
   onUpgrade?: () => void;

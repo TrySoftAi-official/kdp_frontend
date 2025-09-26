@@ -9,8 +9,8 @@ import {
   TestTube,
   Zap
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useUIStore } from '@/stores/uiStore';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useUI } from '@/redux/hooks/useUI';
 import { UserRole } from '@/types';
 
 interface QuickAction {
@@ -24,7 +24,7 @@ interface QuickAction {
 
 export const QuickActions: React.FC = () => {
   const navigate = useNavigate();
-  const { addNotification } = useUIStore();
+  const { addNotification } = useUI();
 
   const handleUploadCSV = () => {
     navigate('/books?action=upload');

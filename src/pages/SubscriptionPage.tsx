@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  SubscriptionService, 
   SubscriptionPlan, 
   UserSubscription, 
   SubscriptionStatus,
   SubscriptionBilling 
-} from '../api/subscriptionService';
-import { PaymentService } from '../api/paymentService';
-import { toast } from '../lib/toast';
+} from '@/apis/subscription';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { toast } from '@/utils/toast';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { fetchSubscriptionPlans as fetchPlansThunk, fetchSubscriptionStatus as fetchStatusThunk } from '@/redux/slices/subscriptionSlice';
 
 interface PlanSelectionModalProps {
   isOpen: boolean;
@@ -213,34 +214,42 @@ const PlanSelectionModal: React.FC<PlanSelectionModalProps> = ({
 
 const SubscriptionPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
+  const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [billingHistory, setBillingHistory] = useState<SubscriptionBilling[]>([]);
+  const plans = useAppSelector((s) => s.subscription.plans) as SubscriptionPlan[];
+  const subscriptionStatus = useAppSelector((s) => s.subscription.status) as SubscriptionStatus | null;
+  // const [billingHistory, setBillingHistory] = useState<SubscriptionBilling[]>([]);
   const [stripeInvoices, setStripeInvoices] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'billing' | 'settings'>('overview');
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    loadSubscriptionData();
-  }, []);
+    if (isAuthenticated && user) {
+      // Load via Redux thunks
+      dispatch(fetchPlansThunk());
+      dispatch(fetchStatusThunk());
+      loadSubscriptionData();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated, user, dispatch]);
 
   const loadSubscriptionData = async () => {
+    if (!isAuthenticated || !user) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       
-      // Load plans
-      const plansResponse = await SubscriptionService.getSubscriptionPlans();
-      setPlans(plansResponse.data.plans);
-
-      // Load subscription status
-      const statusResponse = await SubscriptionService.getMySubscriptionStatus();
-      setSubscriptionStatus(statusResponse.data);
-
-      // Load subscription details if exists
-      if (statusResponse.data.has_subscription) {
+      // Load subscription details if exists (status from Redux)
+      const status = subscriptionStatus || (await SubscriptionService.getMySubscriptionStatus()).data;
+      if (status?.has_subscription) {
         const subscriptionResponse = await SubscriptionService.getMySubscription();
         setSubscription(subscriptionResponse.data.subscription);
 
@@ -386,6 +395,30 @@ const SubscriptionPage: React.FC = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading subscription data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="bg-white rounded-lg shadow-sm border p-8">
+            <div className="text-gray-400 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
+            <p className="text-gray-600 mb-6">Please log in to view your subscription details and manage your account.</p>
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Log In
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -687,7 +720,7 @@ const SubscriptionPage: React.FC = () => {
       />
       
       {/* Debug Info */}
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <div className="fixed bottom-4 right-4 bg-black bg-opacity-75 text-white p-2 rounded text-xs">
           <div>Modal State: {showPlanModal ? 'OPEN' : 'CLOSED'}</div>
           <div>Plans: {plans.length}</div>

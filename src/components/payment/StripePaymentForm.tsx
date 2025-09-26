@@ -7,8 +7,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, CreditCard, Loader2, Lock, Check, AlertCircle } from 'lucide-react';
-import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { toast } from '@/utils/toast';
+import { cn } from '@/utils/utils';
 
 interface StripePaymentFormProps {
   amount: number;

@@ -19,18 +19,16 @@ import {
   Shield,
   Zap
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { usePaymentApi } from '@/hooks/usePaymentApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 import { 
   UserSubscriptionWithPlanResponse, 
   SubscriptionPlan,
-  SubscriptionStatus,
-  SubscriptionService
-} from '@/api/subscriptionService';
-import { cn } from '@/lib/utils';
+  SubscriptionStatus
+} from '@/apis/subscription';
+import { cn } from '@/utils/utils';
 
 interface EnhancedSubscriptionManagerProps {
   onSubscriptionChange?: () => void;
@@ -43,13 +41,54 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
   showUpgradePrompt = false,
   className
 }) => {
+  // Utility functions
+  const isSubscriptionActive = (subscription: any) => {
+    return subscription?.status === 'active';
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active': return 'Active';
+      case 'cancelled': return 'Cancelled';
+      case 'past_due': return 'Past Due';
+      case 'incomplete': return 'Incomplete';
+      case 'trialing': return 'Trialing';
+      default: return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'text-green-600 bg-green-100';
+      case 'cancelled': return 'text-red-600 bg-red-100';
+      case 'past_due': return 'text-orange-600 bg-orange-100';
+      case 'incomplete': return 'text-yellow-600 bg-yellow-100';
+      case 'trialing': return 'text-blue-600 bg-blue-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
-  const paymentApi = usePaymentApi();
+  const { 
+    currentSubscription, 
+    subscriptionStatus, 
+    isLoading, 
+    fetchCurrent, 
+    fetchStatus, 
+    upgrade, 
+    cancel 
+  } = useSubscription();
   
-  const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -265,7 +304,7 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
     }
 
     const status = subscriptionData.subscription.status;
-    const isActive = SubscriptionService.isSubscriptionActive(subscriptionData.subscription);
+    const isActive = isSubscriptionActive(subscriptionData.subscription);
     
     if (isActive) {
       return { status: 'Active', color: 'text-green-600 bg-green-100', icon: CheckCircle };
@@ -274,7 +313,7 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
     } else if (status === 'past_due') {
       return { status: 'Past Due', color: 'text-orange-600 bg-orange-100', icon: AlertTriangle };
     } else {
-      return { status: SubscriptionService.getStatusLabel(status), color: SubscriptionService.getStatusColor(status), icon: AlertTriangle };
+      return { status: getStatusLabel(status), color: getStatusColor(status), icon: AlertTriangle };
     }
   };
 
@@ -325,7 +364,7 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
                   {subscriptionData.plan.name}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {SubscriptionService.formatCurrency(subscriptionData.plan.price)}/{subscriptionData.plan.billing_cycle === 'monthly' ? 'month' : 'year'}
+                  {formatCurrency(subscriptionData.plan.price)}/{subscriptionData.plan.billing_cycle === 'monthly' ? 'month' : 'year'}
                 </div>
               </div>
 
@@ -336,7 +375,7 @@ export const EnhancedSubscriptionManager: React.FC<EnhancedSubscriptionManagerPr
                   <span className="font-medium">Next Billing</span>
                 </div>
                 <div className="text-lg font-semibold">
-                  {SubscriptionService.formatDate(subscriptionData.subscription.current_period_end)}
+                  {formatDate(subscriptionData.subscription.current_period_end)}
                 </div>
                 <div className="text-sm text-muted-foreground">
                   {subscriptionData.subscription.billing_cycle === 'monthly' ? 'Monthly' : 'Yearly'} billing

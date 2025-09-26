@@ -22,18 +22,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { usePaymentApi } from '@/hooks/usePaymentApi';
 import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 import { 
   UserSubscriptionWithPlanResponse, 
-  SubscriptionStatus,
-  SubscriptionService 
-} from '@/api/subscriptionService';
+  SubscriptionStatus
+} from '@/apis/subscription';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils';
 
 interface SubscriptionStatusWidgetProps {
   showUpgradeButton?: boolean;
@@ -54,7 +53,13 @@ export const SubscriptionStatusWidget: React.FC<SubscriptionStatusWidgetProps> =
 }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const subscriptionApi = useSubscriptionApi();
+  const { 
+    subscriptionStatus: reduxSubscriptionStatus, 
+    currentSubscription, 
+    isLoading: reduxIsLoading, 
+    fetchStatus, 
+    fetchCurrent 
+  } = useSubscription();
   const paymentApi = usePaymentApi();
   const { getUsageInfo, getCurrentPlan, getSubscriptionStatus } = useFeatureEnforcement();
   
@@ -72,13 +77,13 @@ export const SubscriptionStatusWidget: React.FC<SubscriptionStatusWidgetProps> =
   const loadSubscriptionData = async () => {
     setIsLoading(true);
     try {
-      const [statusData, subscriptionData] = await Promise.all([
-        subscriptionApi.getMySubscriptionStatus(),
-        subscriptionApi.getMySubscription()
+      await Promise.all([
+        fetchStatus(),
+        fetchCurrent()
       ]);
       
-      setSubscriptionStatus(statusData);
-      setSubscriptionData(subscriptionData);
+      setSubscriptionStatus(reduxSubscriptionStatus);
+      setSubscriptionData(currentSubscription);
     } catch (error) {
       console.error('Failed to load subscription data:', error);
     } finally {
@@ -99,7 +104,7 @@ export const SubscriptionStatusWidget: React.FC<SubscriptionStatusWidgetProps> =
       setIsProcessing(true);
       try {
         // Get available plans and select the first paid plan
-        const plans = await subscriptionApi.getSubscriptionPlans(true);
+        const plans = await fetchPlans(true);
         const firstPaidPlan = plans?.find(plan => plan.plan_id !== 'free');
         
         if (firstPaidPlan) {

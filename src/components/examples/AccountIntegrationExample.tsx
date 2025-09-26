@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, User, Settings, Bell, Shield, CreditCard } from 'lucide-react';
-import { UserUpdate, UserPreferences } from '@/api/userService';
+import { UserUpdate, UserPreferences } from '@/services/userService';
 
 /**
  * Example component showing how to integrate the user API hooks

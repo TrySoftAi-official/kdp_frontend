@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { usePaymentApi } from './usePaymentApi';
 import { useSubscriptionApi } from './useSubscriptionApi';
-import { useAuth } from './useAuth';
-import { toast } from '@/lib/toast';
-import { SubscriptionPlan } from '@/api/subscriptionService';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { toast } from '@/utils/toast';
+import { SubscriptionPlan } from '@/services/subscriptionService';
 
 interface PaymentFlowState {
   isProcessing: boolean;

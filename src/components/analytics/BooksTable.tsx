@@ -16,8 +16,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Book } from '@/types';
-import { formatCurrency, formatNumber } from '@/lib/utils';
-import { analyticsApi } from '@/lib/api';
+import { formatCurrency, formatNumber } from '@/utils/utils';
+import { analyticsApi } from '@/utils/api';
 
 interface BooksTableProps {
   dateRange: string;

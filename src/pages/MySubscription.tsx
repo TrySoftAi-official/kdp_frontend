@@ -3,29 +3,25 @@ import { CreditCard, ArrowLeft, Settings, ExternalLink, MessageCircle, Loader2 }
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MySubscription } from '@/components/subscription/MySubscription';
+import { OptimizedSubscriptionCard } from '@/components/subscription/OptimizedSubscriptionCard';
 import { BillingHistory } from '@/components/subscription/BillingHistory';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { usePaymentApi } from '@/hooks/usePaymentApi';
-import { toast } from '@/lib/toast';
-import { UserSubscriptionWithPlanResponse } from '@/api/subscriptionService';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
+import { toast } from '@/utils/toast';
 
 export const MySubscriptionPage: React.FC = () => {
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
-  const paymentApi = usePaymentApi();
+  const { 
+    currentSubscription, 
+    fetchAll
+  } = useSubscription();
   
-  const [subscriptionData, setSubscriptionData] = useState<UserSubscriptionWithPlanResponse | null>(null);
   const [showPlansModal, setShowPlansModal] = useState(false);
   const [isLoadingBillingPortal, setIsLoadingBillingPortal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSubscriptionData();
-    
     // Handle payment success/cancellation from URL params
     const urlParams = new URLSearchParams(window.location.search);
     const subscriptionStatus = urlParams.get('subscription');
@@ -33,6 +29,8 @@ export const MySubscriptionPage: React.FC = () => {
     
     if (subscriptionStatus === 'success') {
       toast.success(`Welcome to ${planId || 'your new plan'}! Your subscription is now active.`);
+      // Refresh subscription data after successful payment
+      fetchAll();
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (subscriptionStatus === 'cancelled') {
@@ -40,28 +38,12 @@ export const MySubscriptionPage: React.FC = () => {
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
-
-  const loadSubscriptionData = async () => {
-    try {
-      setError(null);
-      const data = await subscriptionApi.getMySubscription();
-      if (data) {
-        setSubscriptionData(data);
-      } else {
-        setError('Failed to load subscription data');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load subscription data';
-      setError(errorMessage);
-      toast.error(errorMessage);
-    }
-  };
+  }, [fetchAll]);
 
   const handleRefreshSubscription = async () => {
     setIsRefreshing(true);
     try {
-      await loadSubscriptionData();
+      await fetchAll();
       toast.success('Subscription data refreshed successfully!');
     } catch (error) {
       toast.error('Failed to refresh subscription data');
@@ -71,100 +53,79 @@ export const MySubscriptionPage: React.FC = () => {
   };
 
   const handleUpgrade = async () => {
-    try {
-      // Check if user has access to upgrade
-      const accessCheck = await subscriptionApi.checkAccess('upgrade_subscription');
-      if (accessCheck && !accessCheck.has_access) {
-        // If no active subscription, show the plans modal anyway (user needs to subscribe)
-        if (accessCheck.message && accessCheck.message.includes('No active subscription')) {
-          console.log('No active subscription - showing plans modal for new subscription');
-          setShowPlansModal(true);
-          return;
-        }
-        // For other access issues, show error
-        toast.error(accessCheck.message || 'You do not have permission to upgrade your subscription');
-        return;
-      }
+    // Always show the plans modal - users should be able to view plans regardless of current subscription
+    console.log('Showing plans modal for subscription upgrade/change');
       setShowPlansModal(true);
-    } catch (error) {
-      console.error('Failed to check upgrade access:', error);
-      // If access check fails, still show the modal (user might need to subscribe)
-      console.log('Access check failed - showing plans modal anyway');
-      setShowPlansModal(true);
-    }
   };
 
   const handlePlansModalClose = () => {
     setShowPlansModal(false);
     // Refresh subscription data in case user completed a payment
-    loadSubscriptionData();
+    fetchAll();
   };
 
   const handleCancel = async () => {
     try {
-      // Check if user has access to cancel
-      const accessCheck = await subscriptionApi.checkAccess('cancel_subscription');
-      if (accessCheck && !accessCheck.has_access) {
-        toast.error(accessCheck.message || 'You do not have permission to cancel your subscription');
-        return;
-      }
-      // Refresh subscription data after cancellation
-      loadSubscriptionData();
+      // For now, just refresh data - cancellation logic can be added later
+      await fetchAll();
+      toast.info('Subscription cancellation feature coming soon. Please contact support for assistance.');
     } catch (error) {
-      console.error('Failed to check cancel access:', error);
-      toast.error('Failed to verify cancellation permissions. Please try again.');
+      console.error('Failed to refresh subscription data:', error);
+      toast.error('Failed to refresh subscription data. Please try again.');
     }
   };
 
   // Helper function for creating subscriptions (used by CheckoutModal)
-  const handleCreateSubscription = async (planId: string, billingCycle: 'monthly' | 'yearly') => {
-    try {
-      const result = await subscriptionApi.createSubscription({
-        plan_id: planId,
-        billing_cycle: billingCycle
-      });
+  // const handleCreateSubscription = async (planId: string, billingCycle: 'monthly' | 'yearly') => {
+  //   try {
+  //     const result = await subscriptionApi.createSubscription({
+  //       plan_id: planId,
+  //       billing_cycle: billingCycle
+  //     });
 
-      if (result) {
-        if (result.success) {
-          if (result.checkout_data) {
-            // Redirect to Stripe checkout for paid plans
-            window.location.href = result.checkout_data.url;
-          } else {
-            // Free plan - subscription created successfully
-            toast.success(result.message || 'Subscription created successfully!');
-            loadSubscriptionData();
-          }
-        } else {
-          toast.error(result.message || 'Failed to create subscription');
-        }
-      } else {
-        toast.error('Failed to create subscription. Please try again.');
-      }
-    } catch (error) {
-      console.error('Failed to create subscription:', error);
-      toast.error('Failed to create subscription. Please try again.');
-    }
-  };
+  //     if (result) {
+  //       if (result.success) {
+  //         if (result.checkout_data) {
+  //           // Redirect to Stripe checkout for paid plans
+  //           window.location.href = result.checkout_data.url;
+  //         } else {
+  //           // Free plan - subscription created successfully
+  //           toast.success(result.message || 'Subscription created successfully!');
+  //           loadSubscriptionData();
+  //         }
+  //       } else {
+  //         toast.error(result.message || 'Failed to create subscription');
+  //       }
+  //     } else {
+  //       toast.error('Failed to create subscription. Please try again.');
+  //     }
+  //   } catch (error) {
+  //     console.error('Failed to create subscription:', error);
+  //     toast.error('Failed to create subscription. Please try again.');
+  //   }
+  // };
 
   const handleBillingPortal = async () => {
-    if (!user || !subscriptionData?.subscription?.stripe_customer_id) {
+    if (!user || !currentSubscription?.subscription?.stripe_customer_id) {
       toast.error('Customer information not available');
       return;
     }
 
     setIsLoadingBillingPortal(true);
     try {
-      const response = await paymentApi.createBillingPortalSession({
-        customer_id: subscriptionData.subscription.stripe_customer_id,
-        return_url: `${window.location.origin}/subscription`
-      });
+      // TODO: Implement billing portal creation with Redux
+      // const response = await createBillingPortal({
+      //   customer_id: currentSubscription.subscription.stripe_customer_id,
+      //   return_url: `${window.location.origin}/subscription`
+      // });
 
-      if (response && response.url) {
-        // Redirect to Stripe billing portal
-        window.location.href = response.url;
-      } else {
-        throw new Error('No billing portal URL received');
-      }
+      // if (response && response.url) {
+      //   // Redirect to Stripe billing portal
+      //   window.location.href = response.url;
+      // } else {
+      //   throw new Error('No billing portal URL received');
+      // }
+      toast.info('Billing portal feature coming soon');
     } catch (error) {
       console.error('Failed to create billing portal session:', error);
       toast.error('Failed to access billing portal. Please try again.');
@@ -182,34 +143,34 @@ I need help with my subscription:
 
 User ID: ${user?.id}
 Email: ${user?.email}
-Current Plan: ${subscriptionData?.plan?.name || 'Unknown'}
+Current Plan: ${currentSubscription?.plan?.name || 'Unknown'}
 
 Please describe your issue here...
 
 Best regards,
-${user?.name || user?.email}`);
+${user?.full_name || user?.email}`);
     
     window.open(`mailto:support@forgekdp.com?subject=${subject}&body=${body}`, '_blank');
   };
 
   // Helper function for checking feature access (used by other components)
-  const checkFeatureAccess = async (feature: string) => {
-    try {
-      const accessCheck = await subscriptionApi.checkAccess(feature);
-      if (accessCheck) {
-        if (!accessCheck.has_access) {
-          toast.error(accessCheck.message || `You don't have access to ${feature}`);
-          return false;
-        }
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error(`Failed to check access for ${feature}:`, error);
-      toast.error(`Failed to verify access for ${feature}. Please try again.`);
-      return false;
-    }
-  };
+  // const checkFeatureAccess = async (feature: string) => {
+  //   try {
+  //     const accessCheck = await subscriptionApi.checkAccess(feature);
+  //     if (accessCheck) {
+  //       if (!accessCheck.has_access) {
+  //         toast.error(accessCheck.message || `You don't have access to ${feature}`);
+  //         return false;
+  //       }
+  //       return true;
+  //     }
+  //     return false;
+  //   } catch (error) {
+  //     console.error(`Failed to check access for ${feature}:`, error);
+  //     toast.error(`Failed to verify access for ${feature}. Please try again.`);
+  //     return false;
+  //   }
+  // };
 
   if (!user) {
     return (
@@ -259,7 +220,7 @@ ${user?.name || user?.email}`);
           <Button 
             variant="outline" 
             onClick={handleBillingPortal}
-            disabled={isLoadingBillingPortal || !subscriptionData?.subscription?.stripe_customer_id}
+            disabled={isLoadingBillingPortal || !currentSubscription?.subscription?.stripe_customer_id}
           >
             {isLoadingBillingPortal ? (
               <>
@@ -275,28 +236,6 @@ ${user?.name || user?.email}`);
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-red-800">
-              <MessageCircle className="h-5 w-5" />
-              <div>
-                <p className="font-medium">Subscription Error</p>
-                <p className="text-sm">{error}</p>
-                <div className="flex gap-2 mt-2">
-                  <Button variant="outline" size="sm" onClick={loadSubscriptionData}>
-                    Try Again
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleContactSupport}>
-                    Contact Support
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Main Content */}
       <Tabs defaultValue="overview" className="space-y-6">
@@ -307,9 +246,10 @@ ${user?.name || user?.email}`);
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <MySubscription 
+          <OptimizedSubscriptionCard 
             onUpgrade={handleUpgrade}
-            onCancel={handleCancel}
+            onManageBilling={handleBillingPortal}
+            showActions={true}
           />
           
           {/* Quick Actions */}
@@ -336,7 +276,7 @@ ${user?.name || user?.email}`);
                   variant="outline" 
                   className="h-auto p-4 flex flex-col items-center gap-2"
                   onClick={handleBillingPortal}
-                  disabled={isLoadingBillingPortal || !subscriptionData?.subscription?.stripe_customer_id}
+                  disabled={isLoadingBillingPortal || !currentSubscription?.subscription?.stripe_customer_id}
                 >
                   {isLoadingBillingPortal ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -391,7 +331,7 @@ ${user?.name || user?.email}`);
                 <Button 
                   variant="outline" 
                   onClick={handleBillingPortal}
-                  disabled={isLoadingBillingPortal || !subscriptionData?.subscription?.stripe_customer_id}
+                  disabled={isLoadingBillingPortal || !currentSubscription?.subscription?.stripe_customer_id}
                 >
                   {isLoadingBillingPortal ? (
                     <>
@@ -420,11 +360,6 @@ ${user?.name || user?.email}`);
       <CheckoutModal
         isOpen={showPlansModal}
         onClose={handlePlansModalClose}
-        onSuccess={() => {
-          setShowPlansModal(false);
-          loadSubscriptionData();
-        }}
-        triggerSource="my_subscription"
       />
     </div>
   );

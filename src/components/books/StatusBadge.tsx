@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { BookStatus } from '@/types';
-import { BOOK_STATUSES } from '@/lib/constants';
+import { BOOK_STATUSES } from '@/utils/constants';
 
 interface StatusBadgeProps {
   status: BookStatus;

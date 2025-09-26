@@ -12,8 +12,8 @@ import {
   HelpCircle,
   ArrowLeft
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { toast } from '@/lib/toast';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { toast } from '@/utils/toast';
 
 export const CheckoutError: React.FC = () => {
   const [searchParams] = useSearchParams();

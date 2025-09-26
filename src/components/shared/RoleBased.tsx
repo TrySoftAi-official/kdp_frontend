@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 import { UserRole } from '@/types';
 
 interface RoleBasedProps {

@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Check, Crown, Star, Zap, BarChart3, MessageCircle, Loader2 } from 'lucide-react';
 import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
-import { useAuth } from '@/hooks/useAuth';
-import { toast } from '@/lib/toast';
-import { SubscriptionPlan } from '@/api/subscriptionService';
-import { cn } from '@/lib/utils';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { toast } from '@/utils/toast';
+import { SubscriptionPlan } from '@/services/subscriptionService';
+import { cn } from '@/utils/utils';
 
 interface PlanUpgradeModalProps {
   isOpen: boolean;

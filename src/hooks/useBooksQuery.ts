@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useBooksApi } from './useBooksApi';
-import { queryKeys } from '@/lib/queryClient';
+import { queryKeys } from '@/utils/queryClient';
 import { 
   BookGenerationRequest, 
   BookUpdate, 
@@ -9,7 +9,7 @@ import {
   BookPrompt,
   BookPromptCreate,
   BookPromptUpdate
-} from '@/api/bookService';
+} from '@/services/bookService';
 
 export const useBooksQuery = () => {
   const booksApi = useBooksApi();

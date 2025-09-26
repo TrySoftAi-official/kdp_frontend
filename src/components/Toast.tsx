@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { toast, Toast as ToastType } from '@/lib/toast';
+import { toast, Toast as ToastType } from '@/utils/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';

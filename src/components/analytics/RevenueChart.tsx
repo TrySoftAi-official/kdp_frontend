@@ -11,8 +11,8 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartData } from '@/types';
-import { formatCurrency } from '@/lib/utils';
-import { CHART_COLORS } from '@/lib/constants';
+import { formatCurrency } from '@/utils/utils';
+import { CHART_COLORS } from '@/utils/constants';
 
 interface RevenueChartProps {
   data: ChartData[];

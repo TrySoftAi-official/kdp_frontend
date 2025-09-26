@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, AlertCircle, Info, Clock } from 'lucide-react';
 import { Event } from '@/types';
-import { EVENT_TYPES } from '@/lib/constants';
-import { getRelativeTime } from '@/lib/utils';
-import { eventsApi } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { EVENT_TYPES } from '@/utils/constants';
+import { getRelativeTime } from '@/utils/utils';
+import { eventsApi } from '@/utils/api';
+import { cn } from '@/utils/utils';
 
 const getEventIcon = (type: Event['type']) => {
   switch (type) {

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useFeatureEnforcement } from '@/hooks/useFeatureEnforcement';
 import { CheckoutModal } from '@/components/subscription/CheckoutModal';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils';
 
 interface FeatureGateProps {
   feature: string;

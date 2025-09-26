@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from './useAuth';
-import { useSubscriptionApi } from './useSubscriptionApi';
-import { toast } from '@/lib/toast';
-import { SubscriptionStatus, SubscriptionService } from '@/api/subscriptionService';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
+import { toast } from '@/utils/toast';
+import { SubscriptionStatus } from '@/apis/subscription';
 
 interface FeatureEnforcementOptions {
   showUpgradeModal?: boolean;
@@ -20,25 +20,17 @@ interface UsageLimit {
 
 export const useFeatureEnforcement = () => {
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
+  const { 
+    subscriptionStatus, 
+    isLoading, 
+    fetchStatus 
+  } = useSubscription();
   
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
   // Load subscription status
   const loadSubscriptionStatus = useCallback(async () => {
     if (!user) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await subscriptionApi.getMySubscriptionStatus();
-      setSubscriptionStatus(response.data);
-    } catch (error) {
-      console.error('Failed to load subscription status:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, subscriptionApi]);
+    await fetchStatus();
+  }, [user, fetchStatus]);
 
   useEffect(() => {
     loadSubscriptionStatus();
@@ -46,17 +38,20 @@ export const useFeatureEnforcement = () => {
 
   // Check if user has access to a specific feature
   const hasFeatureAccess = useCallback((feature: string): boolean => {
-    if (!subscriptionStatus?.limits) return false;
+    if (!subscriptionStatus) return false;
+    
+    // Check the plan type and limits
+    const planId = subscriptionStatus.plan?.plan_id?.toLowerCase();
     
     switch (feature) {
       case 'analytics':
-        return subscriptionStatus.limits.analytics_access;
+        return planId === 'pro' || planId === 'enterprise';
       case 'priority_support':
-        return subscriptionStatus.limits.priority_support;
+        return planId === 'enterprise';
       case 'custom_branding':
-        return subscriptionStatus.limits.custom_branding;
+        return planId === 'enterprise';
       case 'api_access':
-        return subscriptionStatus.limits.api_access;
+        return planId === 'pro' || planId === 'enterprise';
       default:
         return false;
     }
@@ -76,30 +71,27 @@ export const useFeatureEnforcement = () => {
       };
     }
 
-    try {
-      const response = await subscriptionApi.checkUsageLimits({
-        usage_type: usageType,
-        increment
-      });
-
-      const data = response.data;
-      return {
-        current: data.current_usage,
-        limit: data.usage_limit || null,
-        resetDate: data.reset_date,
-        canUse: data.can_use,
-        message: data.message
-      };
-    } catch (error) {
-      console.error('Failed to check usage limit:', error);
+    if (!subscriptionStatus) {
       return {
         current: 0,
         limit: 0,
         canUse: false,
-        message: 'Failed to check usage limit'
+        message: 'No subscription data available'
       };
     }
-  }, [user, subscriptionApi]);
+
+    // Simple usage limit check based on current subscription data
+    const usage = subscriptionStatus.usage;
+    const current = usage?.[usageType] || 0;
+    const limit = subscriptionStatus.plan?.limits?.[usageType] || null;
+    
+    return {
+      current,
+      limit,
+      canUse: !limit || current < limit,
+      message: limit && current >= limit ? `You've reached your ${usageType} limit` : undefined
+    };
+  }, [user, subscriptionStatus]);
 
   // Enforce feature access with upgrade prompt
   const enforceFeatureAccess = useCallback((
@@ -209,8 +201,8 @@ export const useFeatureEnforcement = () => {
     const status = subscriptionStatus.status || 'unknown';
     
     return {
-      status: SubscriptionService.getStatusLabel(status),
-      color: SubscriptionService.getStatusColor(status),
+      status: status,
+      color: isActive ? 'green' : 'red',
       isActive
     };
   }, [subscriptionStatus, isSubscriptionActive]);
@@ -221,7 +213,11 @@ export const useFeatureEnforcement = () => {
     
     const booksUsage = subscriptionStatus.usage.books_created;
     if (booksUsage && booksUsage.current_usage) {
-      return SubscriptionService.getRecommendedPlan(booksUsage.current_usage);
+      // Simple recommendation logic
+      if (booksUsage.current_usage > 10) return 'enterprise';
+      if (booksUsage.current_usage > 5) return 'pro';
+      if (booksUsage.current_usage > 2) return 'basic';
+      return 'free';
     }
     
     return 'free';

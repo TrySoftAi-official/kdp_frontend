@@ -4,8 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { XCircle, ArrowLeft, RefreshCw, Home, MessageCircle, CreditCard, AlertTriangle } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { SubscriptionPlan } from '@/api/subscriptionService';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { SubscriptionPlan } from '@/apis/subscription';
 
 export const CheckoutFailure: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -43,17 +43,20 @@ export const CheckoutFailure: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-2xl shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
-            <XCircle className="h-8 w-8 text-red-600" />
+          <div className="mx-auto mb-6 h-20 w-20 rounded-full bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center shadow-lg">
+            <XCircle className="h-10 w-10 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold text-red-800">
+          <CardTitle className="text-3xl font-bold text-red-800 mb-2">
             Payment Failed
           </CardTitle>
-          <CardDescription className="text-lg text-gray-600">
+          <CardDescription className="text-xl text-gray-600">
             We couldn't process your payment at this time
           </CardDescription>
+          <p className="text-gray-500 mt-2">
+            Don't worry, no charges were made to your account.
+          </p>
         </CardHeader>
 
         <CardContent className="space-y-6">

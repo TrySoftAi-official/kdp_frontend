@@ -14,10 +14,10 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useSubscriptionApi } from '@/hooks/useSubscriptionApi';
+import { useAuth } from '@/redux/hooks/useAuth';
+import { useSubscription } from '@/redux/hooks/useSubscription';
 import { usePaymentApi } from '@/hooks/usePaymentApi';
-import { toast } from '@/lib/toast';
+import { toast } from '@/utils/toast';
 
 interface DebugInfo {
   user: any;
@@ -30,7 +30,7 @@ interface DebugInfo {
 
 export const PaymentDebugger: React.FC = () => {
   const { user } = useAuth();
-  const subscriptionApi = useSubscriptionApi();
+  const { currentSubscription, subscriptionStatus, fetchPlans } = useSubscription();
   const paymentApi = usePaymentApi();
   
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
@@ -42,8 +42,8 @@ export const PaymentDebugger: React.FC = () => {
     setIsLoading(true);
     try {
       const [subscriptionResponse, plansResponse] = await Promise.all([
-        subscriptionApi.getMySubscription().catch(err => ({ error: err.message })),
-        subscriptionApi.getSubscriptionPlans().catch(err => ({ error: err.message }))
+        Promise.resolve(currentSubscription).catch(err => ({ error: err.message })),
+        fetchPlans().catch(err => ({ error: err.message }))
       ]);
 
       const debugData: DebugInfo = {
@@ -90,7 +90,7 @@ export const PaymentDebugger: React.FC = () => {
 
     // Test 2: API Endpoints
     try {
-      const plansResponse = await subscriptionApi.getSubscriptionPlans();
+      const plansResponse = await fetchPlans();
       tests.push({
         name: 'Plans API',
         status: plansResponse?.data?.plans ? 'pass' : 'fail',

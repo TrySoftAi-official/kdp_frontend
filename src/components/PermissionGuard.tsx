@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ReactNode } from 'react';
 import { useEnhancedSubscription } from '@/hooks/useEnhancedSubscription';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/redux/hooks/useAuth';
 
 interface PermissionGuardProps {
   children: ReactNode;
